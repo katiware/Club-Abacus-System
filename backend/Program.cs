@@ -3,6 +3,11 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 
+//swagger
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+
 // Configure CORS for local React frontend development (e.g., Vite dev server on port 5173)
 builder.Services.AddCors(options =>
 {
@@ -16,6 +21,14 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+//swagger UI
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Club Abacus System API v1");
+});
+
 
 // Configure the HTTP request pipeline.
 app.UseCors();
