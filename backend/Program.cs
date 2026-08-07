@@ -1,9 +1,12 @@
+using Club_Abacus_System.Data;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
 
-//swagger
+//swagger(実装時には実行されないようにする)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -20,9 +23,16 @@ builder.Services.AddCors(options =>
     });
 });
 
+
+// PostgreSQL 接続設定（appsettings.json のデータベース接続文字列を使用）
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString(
+            "DefaultConnection")));
+
 var app = builder.Build();
 
-//swagger UI
+//swagger UI(実装時には実行されないようにする)
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
