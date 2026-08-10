@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, FileText } from 'lucide-react';
+import { ArrowLeft, CheckCircle, FileText, Clock } from 'lucide-react';
 import './Admin.css';
 
 function Admin() {
@@ -45,6 +45,16 @@ function Admin() {
           method: 'Web購入',
           status: 'PENDING_APPROVAL',
           date: '2026-08-10'
+        },
+        {
+          id: 'EXP-1004',
+          applicant: '高橋 次郎',
+          title: '技術書購入',
+          amount: 3200,
+          type: '立替払い',
+          method: 'Web購入',
+          status: 'WAITING_CONFIRMATION',
+          date: '2026-08-11'
         }
       ]);
       setIsLoading(false);
@@ -53,11 +63,24 @@ function Admin() {
     fetchApplications();
   }, []);
 
-  const handleApprove = (id) => {
+  const handleAction = (id, currentStatus) => {
     // Optimistic UI update
     setApplications(prev => prev.filter(app => app.id !== id));
-    // Here you would make an API call to update status to APPROVED
-    alert(`${id} を承認しました。`);
+    
+    if (currentStatus === 'PENDING_APPROVAL') {
+      alert(`${id} を承認しました。`);
+    } else if (currentStatus === 'WAITING_CONFIRMATION') {
+      alert(`${id} の証憑を確認し、精算を完了しました。`);
+    }
+  };
+
+  const renderStatus = (status) => {
+    if (status === 'PENDING_APPROVAL') {
+      return <span style={{ color: '#e65100', fontWeight: 'bold' }}>承認待ち</span>;
+    } else if (status === 'WAITING_CONFIRMATION') {
+      return <span style={{ color: '#1565c0', fontWeight: 'bold' }}>最終確認待ち</span>;
+    }
+    return status;
   };
 
   return (
@@ -67,14 +90,14 @@ function Admin() {
           <ArrowLeft size={20} />
           ダッシュボードへ戻る
         </button>
-        <h1>管理画面 - 承認待ち一覧</h1>
+        <h1>管理画面 - 未処理タスク一覧</h1>
       </header>
 
       <main className="admin-content">
         {isLoading ? (
           <div className="loading-state">読み込み中...</div>
         ) : applications.length === 0 ? (
-          <div className="empty-state">現在、承認待ちの申請はありません。</div>
+          <div className="empty-state">現在、未処理のタスクはありません。</div>
         ) : (
           <div className="table-wrapper">
             <table className="admin-table">
@@ -86,6 +109,7 @@ function Admin() {
                   <th>用途・品目</th>
                   <th>金額</th>
                   <th>区分</th>
+                  <th>状態</th>
                   <th>操作</th>
                 </tr>
               </thead>
@@ -102,6 +126,7 @@ function Admin() {
                         {app.type}
                       </span>
                     </td>
+                    <td>{renderStatus(app.status)}</td>
                     <td className="cell-actions">
                       <button className="action-btn view-btn" title="詳細を見る">
                         <FileText size={16} />
@@ -109,11 +134,11 @@ function Admin() {
                       </button>
                       <button 
                         className="action-btn approve-btn" 
-                        title="承認する"
-                        onClick={() => handleApprove(app.id)}
+                        title={app.status === 'PENDING_APPROVAL' ? '承認する' : '確認完了する'}
+                        onClick={() => handleAction(app.id, app.status)}
                       >
                         <CheckCircle size={16} />
-                        承認
+                        {app.status === 'PENDING_APPROVAL' ? '承認' : '確認完了'}
                       </button>
                     </td>
                   </tr>

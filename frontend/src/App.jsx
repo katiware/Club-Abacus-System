@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import ExpenseForm from './pages/ExpenseForm';
 import Admin from './pages/Admin';
 import Calculator from './pages/Calculator';
+import MyApplications from './pages/MyApplications';
 import './App.css';
 
 // A simple PrivateRoute component for protecting routes
@@ -48,6 +49,14 @@ function App() {
           element={
             <PrivateRoute>
               <Calculator />
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/my-applications" 
+          element={
+            <PrivateRoute>
+              <MyApplications />
             </PrivateRoute>
           } 
         />

@@ -32,8 +32,8 @@ function ExpenseForm() {
     setError(null);
 
     // Validation
-    if (formData.purchaseMethod === 'WEB' && !file) {
-      setError('Web購入の場合は、領収書や請求書のアップロードが必須です。');
+    if (formData.expenseType === 'ADVANCE_PAYMENT' && !file) {
+      setError('事前出金の場合は、見積書等のファイルのアップロードが必須です。');
       return;
     }
 
@@ -161,33 +161,32 @@ function ExpenseForm() {
             </div>
           </div>
 
-          {/* Conditional File Upload */}
-          <div className={`file-upload-section ${formData.purchaseMethod === 'WEB' ? 'required' : ''}`}>
-            <label>
-              証憑ファイル（領収書・請求書）
-              {formData.purchaseMethod === 'WEB' && <span className="badge-required">必須</span>}
-              {formData.purchaseMethod === 'STORE' && <span className="badge-optional">任意</span>}
-            </label>
-            <div className="file-drop-area">
-              <UploadCloud size={32} className="upload-icon" />
-              <p>クリックしてファイルを選択するか、ドラッグ＆ドロップしてください</p>
-              <input 
-                type="file" 
-                className="file-input" 
-                onChange={handleFileChange}
-                accept=".pdf,image/*" 
-              />
-              {file && (
-                <div className="file-name">
-                  <FileText size={16} />
-                  {file.name}
-                </div>
-              )}
+          {/* Conditional File Upload for Advance Payment */}
+          {formData.expenseType === 'ADVANCE_PAYMENT' && (
+            <div className="file-upload-section required">
+              <label>
+                見積書または請求書ファイル
+                <span className="badge-required">必須</span>
+              </label>
+              <div className="file-drop-area">
+                <UploadCloud size={32} className="upload-icon" />
+                <p>クリックしてファイルを選択するか、ドラッグ＆ドロップしてください</p>
+                <input 
+                  type="file" 
+                  className="file-input" 
+                  onChange={handleFileChange}
+                  accept=".pdf,image/*" 
+                />
+                {file && (
+                  <div className="file-name">
+                    <FileText size={16} />
+                    {file.name}
+                  </div>
+                )}
+              </div>
             </div>
-            {formData.purchaseMethod === 'STORE' && (
-              <p className="help-text">※実店舗購入の場合は、後日紙の領収書を直接提出してください。</p>
-            )}
-          </div>
+          )}
+
 
           <div className="form-actions">
             <button type="submit" className="submit-button" disabled={isSubmitting}>

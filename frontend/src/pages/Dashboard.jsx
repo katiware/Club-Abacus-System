@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Plus, Settings, Calculator } from 'lucide-react';
+import { LogOut, Plus, Settings, Calculator, FileText } from 'lucide-react';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -19,6 +19,10 @@ function Dashboard() {
           <button onClick={() => navigate('/apply')} className="new-apply-button">
             <Plus size={16} />
             新規申請
+          </button>
+          <button onClick={() => navigate('/my-applications')} className="action-button">
+            <FileText size={16} />
+            申請履歴・提出
           </button>
           <button onClick={() => navigate('/admin')} className="action-button">
             <Settings size={16} />
