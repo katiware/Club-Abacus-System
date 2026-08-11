@@ -78,3 +78,6 @@ venv/
 env/
 .env
 *.log
+
+# AI Rules
+docs/ai_rules_local.md

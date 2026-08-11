@@ -7,19 +7,27 @@ load_dotenv()
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
-intents = discord.Intents.default()
-intents.message_content = True
+class AbacusBot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.default()
+        intents.message_content = True
+        super().__init__(command_prefix="!", intents=intents)
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+    async def setup_hook(self):
+        # Load cogs
+        await self.load_extension("cogs.budget")
+        await self.load_extension("cogs.history")
+        
+        # Sync slash commands
+        await self.tree.sync()
+        print("Slash commands synced.")
+
+bot = AbacusBot()
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user.name} (ID: {bot.user.id})")
     print("------")
-
-@bot.command(name="ping")
-async def ping(ctx):
-    await ctx.send("Pong!")
 
 if __name__ == "__main__":
     if TOKEN:
