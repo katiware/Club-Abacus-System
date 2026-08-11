@@ -17,6 +17,8 @@ class AbacusBot(commands.Bot):
         # Load cogs
         await self.load_extension("cogs.budget")
         await self.load_extension("cogs.history")
+        await self.load_extension("cogs.voting")
+        await self.load_extension("cogs.notifications")
         
         # Sync slash commands
         await self.tree.sync()
