@@ -134,6 +134,25 @@
   background-color: #059669;
 }
 
+.reject-btn {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.reject-btn:hover {
+  background-color: #d97706;
+}
+
+.delete-btn {
+  background-color: white;
+  color: #ef4444;
+  border: 1px solid #fee2e2;
+}
+
+.delete-btn:hover {
+  background-color: #fee2e2;
+}
+
 .loading-state, .empty-state {
   text-align: center;
   padding: 64px;

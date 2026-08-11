@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, FileText, Clock } from 'lucide-react';
+import { ArrowLeft, CheckCircle, FileText, XCircle, Trash2 } from 'lucide-react';
 import './Admin.css';
 
 function Admin() {
@@ -74,6 +74,22 @@ function Admin() {
     }
   };
 
+  const handleReject = (id) => {
+    const comment = prompt("差し戻しの理由（コメント）を入力してください:");
+    if (comment !== null) {
+      setApplications(prev => prev.filter(app => app.id !== id));
+      alert(`${id} を差し戻しました。\n理由: ${comment}`);
+    }
+  };
+
+  const handleDelete = (id) => {
+    if (window.confirm(`${id} の申請を強制削除してもよろしいですか？この操作は取り消せません。`)) {
+      setApplications(prev => prev.filter(app => app.id !== id));
+      alert(`${id} を強制削除しました。`);
+    }
+  };
+
+
   const renderStatus = (status) => {
     if (status === 'PENDING_APPROVAL') {
       return <span style={{ color: '#e65100', fontWeight: 'bold' }}>承認待ち</span>;
@@ -139,6 +155,21 @@ function Admin() {
                       >
                         <CheckCircle size={16} />
                         {app.status === 'PENDING_APPROVAL' ? '承認' : '確認完了'}
+                      </button>
+                      <button 
+                        className="action-btn reject-btn" 
+                        title="差し戻す"
+                        onClick={() => handleReject(app.id)}
+                      >
+                        <XCircle size={16} />
+                        差戻
+                      </button>
+                      <button 
+                        className="action-btn delete-btn" 
+                        title="強制削除する"
+                        onClick={() => handleDelete(app.id)}
+                      >
+                        <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>

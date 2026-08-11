@@ -117,5 +117,38 @@
 }
 
 .widget-value.alert {
-  color: #dc2626;
+  color: #ef4444;
+}
+
+.overdue-alert-banner {
+  display: flex;
+  align-items: center;
+  background-color: #fef2f2;
+  border: 1px solid #f87171;
+  color: #b91c1c;
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.overdue-alert-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.overdue-action-btn {
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.overdue-action-btn:hover {
+  background-color: #dc2626;
 }
