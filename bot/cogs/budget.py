@@ -19,15 +19,17 @@ class Budget(commands.Cog):
             return
             
         embed = discord.Embed(title="📊 予算残高", color=discord.Color.blue())
-        embed.add_field(name="総予算", value=f"¥{budget_data['total']:,}", inline=True)
-        embed.add_field(name="使用済", value=f"¥{budget_data['spent']:,}", inline=True)
-        embed.add_field(name="残高", value=f"¥{budget_data['remaining']:,}", inline=False)
+        embed.add_field(name="総予算", value=f"¥{budget_data['total']:,}", inline=False)
+        embed.add_field(name="申請未許可 (Pending)", value=f"¥{budget_data['pending']:,}", inline=True)
+        embed.add_field(name="申請許可済 (Approved)", value=f"¥{budget_data['approved']:,}", inline=True)
+        embed.add_field(name="支出確定 (Completed)", value=f"¥{budget_data['completed']:,}", inline=True)
+        embed.add_field(name="利用可能残高", value=f"¥{budget_data['remaining']:,}", inline=False)
         
         # Generate chart
         fig, ax = plt.subplots(figsize=(6, 4))
-        labels = ['Spent', 'Remaining']
-        sizes = [budget_data['spent'], budget_data['remaining']]
-        colors = ['#ff9999','#66b3ff']
+        labels = ['Pending', 'Approved', 'Completed', 'Remaining']
+        sizes = [budget_data['pending'], budget_data['approved'], budget_data['completed'], budget_data['remaining']]
+        colors = ['#ffcc99', '#ff9999', '#ff6666', '#66b3ff']
         ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=90)
         ax.axis('equal')
         
