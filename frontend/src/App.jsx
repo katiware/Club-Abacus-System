@@ -20,6 +20,20 @@ const PrivateRoute = ({ children }) => {
   return token ? children : <Navigate to="/login" replace />;
 };
 
+// AdminRoute for protecting administrator-only routes (Mock RBAC)
+const AdminRoute = ({ children }) => {
+  const token = localStorage.getItem('authToken');
+  // モック: 実際のアプリではJWTのクレームやAPIから取得しますが、ここではlocalStorageを使用
+  const userRole = localStorage.getItem('userRole') || 'ADMIN'; // テスト用にデフォルトADMIN
+  
+  if (!token) return <Navigate to="/login" replace />;
+  if (userRole !== 'ADMIN') {
+    alert('管理者権限が必要です。ダッシュボードに戻ります。');
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
 function App() {
   return (
     <BrowserRouter>
@@ -45,9 +59,9 @@ function App() {
         <Route 
           path="/admin" 
           element={
-            <PrivateRoute>
+            <AdminRoute>
               <Admin />
-            </PrivateRoute>
+            </AdminRoute>
           } 
         />
         <Route 
@@ -69,25 +83,25 @@ function App() {
         <Route 
           path="/all-applications" 
           element={
-            <PrivateRoute>
+            <AdminRoute>
               <AllApplications />
-            </PrivateRoute>
+            </AdminRoute>
           } 
         />
         <Route 
           path="/admin-settings" 
           element={
-            <PrivateRoute>
+            <AdminRoute>
               <AdminSettings />
-            </PrivateRoute>
+            </AdminRoute>
           } 
         />
         <Route 
           path="/users" 
           element={
-            <PrivateRoute>
+            <AdminRoute>
               <UserManagement />
-            </PrivateRoute>
+            </AdminRoute>
           } 
         />
         <Route 

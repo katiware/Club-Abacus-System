@@ -22,8 +22,12 @@ function UserManagement() {
   };
 
   const handleDelete = (id, name) => {
-    if (window.confirm(`${name} のアカウントを削除しますか？この操作は元に戻せません。`)) {
+    const input = window.prompt(`【危険な操作】\n${name} のアカウントを削除しようとしています。\nこの操作は元に戻せません。確認のため、削除する部員の名前（${name}）を入力してください。`);
+    if (input === name) {
       setUsers(users.filter(u => u.id !== id));
+      alert('アカウントを削除しました。');
+    } else if (input !== null) {
+      alert('入力された名前が一致しませんでした。操作をキャンセルします。');
     }
   };
 

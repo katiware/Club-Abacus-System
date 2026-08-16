@@ -10,8 +10,11 @@ function AdminSettings() {
   const [notifyOnComplete, setNotifyOnComplete] = useState(true);
 
   const handleYearReset = () => {
-    if (window.confirm("本当に今年度のデータをリセットして新年度を開始しますか？この操作は取り消せません。")) {
+    const input = window.prompt("【危険な操作】\n本当に今年度のデータをリセットして新年度を開始しますか？\nこの操作は取り消せません。\n\n実行する場合は「リセット」と入力してください。");
+    if (input === "リセット") {
       alert("新年度の準備が完了しました。");
+    } else if (input !== null) {
+      alert("入力内容が一致しませんでした。操作をキャンセルします。");
     }
   };
 
@@ -42,7 +45,7 @@ function AdminSettings() {
             <div className="form-group">
               <label>Discord Webhook URL</label>
               <input 
-                type="text" 
+                type="password" 
                 className="form-input" 
                 value={webhookUrl}
                 onChange={(e) => setWebhookUrl(e.target.value)}
