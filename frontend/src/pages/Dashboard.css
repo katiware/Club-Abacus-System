@@ -152,3 +152,49 @@
 .overdue-action-btn:hover {
   background-color: #dc2626;
 }
+
+.dashboard-menus {
+  margin-top: 40px;
+}
+
+.dashboard-menus h3 {
+  margin-bottom: 16px;
+  color: #333;
+}
+
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.menu-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  background-color: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  color: #333;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.menu-btn:hover {
+  background-color: #e3f2fd;
+  border-color: #2196f3;
+  color: #1976d2;
+}
+
+.menu-btn svg {
+  color: #555;
+}
+
+.menu-btn:hover svg {
+  color: #1976d2;
+}
