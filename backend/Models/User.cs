@@ -21,7 +21,7 @@ public class User
     public string Name { get; set; } = string.Empty; // 氏名
 
     [MaxLength(100)]
-    public string? DiscordId { get; set; } // DiscordユーザーID（Nullable）
+    public string DiscordId { get; set; } = string.Empty; // DiscordユーザーID
 
     public bool IsActive { get; set; } = true; // ログイン可否制御（Default: true）
 

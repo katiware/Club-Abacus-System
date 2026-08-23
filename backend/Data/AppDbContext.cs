@@ -32,6 +32,15 @@ public class AppDbContext(
     public DbSet<ExpenseDocument> ExpenseDocuments =>
         Set<ExpenseDocument>();
 
+    public DbSet<RecurringExpenseTemplate> RecurringExpenseTemplates =>
+        Set<RecurringExpenseTemplate>();
+
+    public DbSet<FiscalYear> FiscalYears =>
+        Set<FiscalYear>();
+
+    public DbSet<UniversitySubmissionBatch> UniversitySubmissionBatches =>
+        Set<UniversitySubmissionBatch>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
@@ -62,12 +71,26 @@ public class AppDbContext(
             .HasIndex(u => u.Email)
             .IsUnique();
 
-        // 経費申請の自己参照（定期払い）における削除時の安全設定
-        // テンプレート(親)を削除しても、そこから生成された過去の申請データ(子)は削除されないようにする
+        // 定期払いテンプレート削除時の安全設定
+        // テンプレートを削除しても、そこから生成された過去の申請データは削除されないようにする
         modelBuilder.Entity<ExpenseRequest>()
-            .HasOne(r => r.ParentRequest)
-            .WithMany(p => p.ChildRequests)
-            .HasForeignKey(r => r.ParentRequestId)
+            .HasOne(r => r.RecurringTemplate)
+            .WithMany(t => t.GeneratedRequests)
+            .HasForeignKey(r => r.RecurringTemplateId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // バッチ削除時の安全設定
+        modelBuilder.Entity<ExpenseRequest>()
+            .HasOne(r => r.UniversitySubmissionBatch)
+            .WithMany(b => b.ExpenseRequests)
+            .HasForeignKey(r => r.UniversitySubmissionBatchId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // 年度削除時の安全設定
+        modelBuilder.Entity<UniversitySubmissionBatch>()
+            .HasOne(b => b.FiscalYear)
+            .WithMany()
+            .HasForeignKey(b => b.FiscalYearId)
             .OnDelete(DeleteBehavior.Restrict);
     }
 }

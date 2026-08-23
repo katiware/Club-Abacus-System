@@ -6,10 +6,10 @@ public enum ExpenseType
     Advance        // 事前出金
 }
 
-public enum PurchaseMethod
+public enum ReceiptType
 {
-    Web,      // Web購入（画像/PDF提出）
-    Physical  // 実店舗購入（紙の領収書手渡し）
+    Digital,      // Web購入（画像/PDF提出）
+    Paper  // 実店舗購入（紙の領収書手渡し）
 }
 
 public enum ExpenseStatus
@@ -39,4 +39,11 @@ public enum DocumentType
     Receipt, // 領収書
     Quotation, // 見積書(事前出金の場合)
     Invoice, // Amazonでは適格請求書(明細書)が必要
+}
+
+public enum PeriodAssignmentStatus
+{
+    Provisional, // 仮
+    Confirmed,   // 確定
+    Corrected    // 訂正（管理者による取消等）
 }
