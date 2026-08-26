@@ -1,0 +1,164 @@
+.admin-container {
+  min-height: 100vh;
+  background-color: #f9fafb;
+}
+
+.admin-header {
+  background-color: white;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.admin-header h1 {
+  margin: 0;
+  font-size: 20px;
+  color: #111827;
+}
+
+.admin-content {
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.table-wrapper {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-table th {
+  background-color: #f3f4f6;
+  color: #4b5563;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.admin-table td {
+  padding: 16px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #1f2937;
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tr:hover {
+  background-color: #f9fafb;
+}
+
+.cell-id {
+  font-family: monospace;
+  color: #6b7280;
+}
+
+.cell-title {
+  font-weight: 500;
+}
+
+.cell-amount {
+  font-weight: 600;
+  font-family: monospace;
+  font-size: 15px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-reimburse {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-advance {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.cell-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-btn {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.view-btn:hover {
+  background-color: #e5e7eb;
+}
+
+.approve-btn {
+  background-color: #10b981;
+  color: white;
+}
+
+.approve-btn:hover {
+  background-color: #059669;
+}
+
+.reject-btn {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.reject-btn:hover {
+  background-color: #d97706;
+}
+
+.delete-btn {
+  background-color: white;
+  color: #ef4444;
+  border: 1px solid #fee2e2;
+}
+
+.delete-btn:hover {
+  background-color: #fee2e2;
+}
+
+.loading-state, .empty-state {
+  text-align: center;
+  padding: 64px;
+  color: #6b7280;
+  font-size: 16px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
