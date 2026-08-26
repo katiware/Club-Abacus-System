@@ -17,9 +17,6 @@ public class AppDbContext(
     public DbSet<UserPermission> UserPermissions =>
         Set<UserPermission>();
 
-    public DbSet<Permission> Permissions =>
-        Set<Permission>();
-
     public DbSet<AuditLog> AuditLogs =>
         Set<AuditLog>();
 
@@ -55,15 +52,12 @@ public class AppDbContext(
 
         // 複合主キーの設定
         modelBuilder.Entity<RolePermission>()
-            .HasKey(rp => new { rp.RoleId, rp.PermissionId });
+            .HasKey(rp => new { rp.RoleId, rp.Permission });
 
         modelBuilder.Entity<UserPermission>()
-            .HasKey(up => new { up.UserId, up.PermissionId });
+            .HasKey(up => new { up.UserId, up.Permission });
 
         // 一意制約の設定
-        modelBuilder.Entity<Permission>()
-            .HasIndex(p => p.PermissionName)
-            .IsUnique();
         modelBuilder.Entity<Role>()
             .HasIndex(p => p.RoleName)
             .IsUnique();
@@ -92,5 +86,22 @@ public class AppDbContext(
             .WithMany()
             .HasForeignKey(b => b.FiscalYearId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // --- 初期データ（シードデータ）の投入 ---
+        var adminRoleId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        modelBuilder.Entity<Role>().HasData(
+            new Role { Id = adminRoleId, RoleName = "ADMIN", Description = "管理者（全権限）" }
+        );
+
+        // ADMIN に全ての権限を付与
+        var allPermissions = Enum.GetValues<PermissionType>();
+        var adminRolePermissions = allPermissions.Select(p => new RolePermission
+        {
+            RoleId = adminRoleId,
+            Permission = p
+        });
+
+        modelBuilder.Entity<RolePermission>().HasData(adminRolePermissions);
     }
 }

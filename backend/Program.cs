@@ -5,6 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseService, Club_Abacus_System.Services.ExpenseService>();
 
 //swagger(実装時には実行されないようにする)
 builder.Services.AddEndpointsApiExplorer();

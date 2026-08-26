@@ -7,13 +7,10 @@ public class RolePermission
 {
     public Guid RoleId { get; set; } // Primary Key, FK → Roles
 
-    public Guid PermissionId { get; set; } // Primary Key, FK → Permissions
+    public PermissionType Permission { get; set; } // Enum
 
     // --- Navigation Properties ---
 
     [ForeignKey(nameof(RoleId))]
     public Role Role { get; set; } = null!;
-
-    [ForeignKey(nameof(PermissionId))]
-    public Permission Permission { get; set; } = null!;
 }

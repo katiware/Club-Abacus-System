@@ -33,4 +33,6 @@ public class User
 
     [ForeignKey(nameof(RoleId))]
     public Role Role { get; set; } = null!; // ロール（多対一）
+
+    public ICollection<UserPermission> UserPermissions { get; set; } = new List<UserPermission>();
 }
