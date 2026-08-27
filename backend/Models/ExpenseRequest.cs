@@ -15,20 +15,24 @@ public class ExpenseRequest
     public ExpenseType Type { get; set; } // REIMBURSEMENT（立替）/ ADVANCE（事前出金）
 
     [Required]
-    public PurchaseMethod PurchaseMethod { get; set; } // WEB / PHYSICAL
+    public ReceiptType ReceiptType { get; set; } // Digital / Paper
 
     [Required]
     public ExpenseStatus Status { get; set; } = ExpenseStatus.PendingApproval; // 進行状況
 
-    public bool IsRecurringTemplate { get; set; } = false; // 定期支払いテンプレートか否か
+    public Guid? RecurringTemplateId { get; set; } // 定期払いバッチによって自動生成された場合、その親テンプレートIDが入る
 
-    public TemplateStatus? TemplateStatus { get; set; } // 定期払い用のACTIVE / INACTIVE（定期のON/OFF）
+    public int TotalAmount { get; set; } // 申請の合計金額（明細の合計キャッシュ）
 
-    public RecurringFrequency? RecurringFrequency { get; set; } // 定期支払い用のMONTHLY / YEARLY
+    public Guid? ApprovedById { get; set; } // 承認者のユーザーID
 
-    public DateOnly? NextGenerationDate { get; set; } // 定期払い用の次回実データを生成する日付
+    public DateTime? ApprovedAt { get; set; } // 承認日時
 
-    public Guid? ParentRequestId { get; set; } // 定期払い用の自己参照FK（自動生成データの大元テンプレートID）
+    public string? RejectionReason { get; set; } // 却下・差し戻し時の理由
+
+    public PeriodAssignmentStatus PeriodAssignmentStatus { get; set; } = PeriodAssignmentStatus.Provisional; // 割当ステータス
+
+    public Guid? UniversitySubmissionBatchId { get; set; } // どの提出バッチ（箱）に入っているか
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -41,10 +45,14 @@ public class ExpenseRequest
     [ForeignKey(nameof(UserId))]
     public User User { get; set; } = null!;
 
-    [ForeignKey(nameof(ParentRequestId))]
-    public ExpenseRequest? ParentRequest { get; set; } // 定期払い用の自己参照（親テンプレート）
+    [ForeignKey(nameof(ApprovedById))]
+    public User? ApprovedBy { get; set; } // 承認者
 
-    public ICollection<ExpenseRequest> ChildRequests { get; set; } = new List<ExpenseRequest>(); // 定期払い用の自動生成された子データ
+    [ForeignKey(nameof(UniversitySubmissionBatchId))]
+    public UniversitySubmissionBatch? UniversitySubmissionBatch { get; set; } // 提出バッチへの参照
+
+    [ForeignKey(nameof(RecurringTemplateId))]
+    public RecurringExpenseTemplate? RecurringTemplate { get; set; } // 親テンプレートへの参照
 
     public ICollection<ExpenseItem> ExpenseItems { get; set; } = new List<ExpenseItem>();//明細
     public ICollection<ExpenseDocument> ExpenseDocuments { get; set; } = new List<ExpenseDocument>();//証憑
