@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Plus, Settings, Calculator, FileText, AlertTriangle } from 'lucide-react';
+import { LogOut, Plus, Settings, Calculator, FileText, AlertTriangle, Users, BookOpen, Clock, User } from 'lucide-react';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -65,6 +65,32 @@ function Dashboard() {
           <div className="widget-card">
             <h3>予算残高</h3>
             <p className="widget-value">¥125,000</p>
+          </div>
+        </div>
+
+        <div className="dashboard-menus">
+          <h3>その他のメニュー (スケルトン)</h3>
+          <div className="menu-grid">
+            <button onClick={() => navigate('/all-applications')} className="menu-btn">
+              <BookOpen size={20} />
+              台帳管理
+            </button>
+            <button onClick={() => navigate('/admin-settings')} className="menu-btn">
+              <Settings size={20} />
+              管理者設定
+            </button>
+            <button onClick={() => navigate('/users')} className="menu-btn">
+              <Users size={20} />
+              部員管理
+            </button>
+            <button onClick={() => navigate('/recurring-payments')} className="menu-btn">
+              <Clock size={20} />
+              定期支払い
+            </button>
+            <button onClick={() => navigate('/profile')} className="menu-btn">
+              <User size={20} />
+              プロフィール設定
+            </button>
           </div>
         </div>
       </main>

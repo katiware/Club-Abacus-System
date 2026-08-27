@@ -1,0 +1,95 @@
+.user-management-container {
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background-color: #f4f7fb;
+}
+
+.header-spacer {
+  flex: 1;
+}
+
+.text-gray-500 {
+  color: #64748b;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.role-admin {
+  background: #fdf2f8;
+  color: #db2777;
+  border-color: #fbcfe8;
+}
+
+.role-admin:hover {
+  background: #fce7f3;
+}
+
+.role-member {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.role-member:hover {
+  background: #e2e8f0;
+}
+
+.status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.status-active {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
+}
+
+.status-active:hover {
+  background: #d1fae5;
+}
+
+.status-inactive {
+  background: #fffbeb;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
+.status-inactive:hover {
+  background: #fef3c7;
+}
+
+.inactive-row td {
+  opacity: 0.6;
+}
+
+.danger-text {
+  color: #ef4444 !important;
+}
+
+.danger-text:hover {
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border-color: #fca5a5 !important;
+}
