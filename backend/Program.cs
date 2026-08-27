@@ -1,4 +1,7 @@
 using Club_Abacus_System.Data;
+using Club_Abacus_System.Models;
+using Club_Abacus_System.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,6 +9,19 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseService, Club_Abacus_System.Services.ExpenseService>();
+
+// --- 権限チェック（認可）の設定 ---
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+
+builder.Services.AddAuthorization(options =>
+{
+    // PermissionType Enum のすべての値をポリシーとして自動登録
+    foreach (var permission in Enum.GetValues<PermissionType>())
+    {
+        options.AddPolicy(permission.ToString(), policy =>
+            policy.Requirements.Add(new PermissionRequirement(permission)));
+    }
+});
 
 //swagger(実装時には実行されないようにする)
 builder.Services.AddEndpointsApiExplorer();
