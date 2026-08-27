@@ -1,0 +1,134 @@
+.recurring-payments-container {
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background-color: #f4f7fb;
+}
+
+.bg-transparent { background: transparent !important; }
+.p-0 { padding: 0 !important; }
+.shadow-none { box-shadow: none !important; }
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 24px;
+}
+
+.template-card {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.template-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.template-card.inactive {
+  opacity: 0.7;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.tpl-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tpl-badge {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.template-card.inactive .tpl-badge {
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+.tpl-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.tpl-title {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.tpl-amount {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 20px;
+  font-family: ui-monospace, monospace;
+}
+
+.tpl-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 14px;
+  margin-bottom: 24px;
+  background: #f1f5f9;
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.tpl-meta strong {
+  color: #334155;
+}
+
+.tpl-footer {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 16px;
+}
+
+.status-toggle-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.status-toggle-btn.active {
+  background: white;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
+.status-toggle-btn.active:hover {
+  background: #fffbeb;
+}
+
+.status-toggle-btn.paused {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
+}
+
+.status-toggle-btn.paused:hover {
+  background: #d1fae5;
+}
