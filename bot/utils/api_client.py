@@ -14,7 +14,17 @@ def get_budget(user_id=None):
     # In a real scenario, you'd handle authentication here (e.g. API keys for the bot)
     try:
         # Mocking for now
-        return {"total": 125000, "spent": 45000, "remaining": 80000}
+        # total: 125000, pending: 15000, approved: 10000, completed: 20000
+        # spent = pending + approved + completed = 45000
+        # remaining = total - spent = 80000
+        return {
+            "total": 125000,
+            "pending": 15000,
+            "approved": 10000,
+            "completed": 20000,
+            "spent": 45000,
+            "remaining": 80000
+        }
     except Exception as e:
         print(f"API Error: {e}")
         return None

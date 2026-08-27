@@ -10,19 +10,24 @@ function ExpenseForm() {
     title: '',
     amount: '',
     expenseType: 'PAY_OUT_OF_POCKET', // 'PAY_OUT_OF_POCKET' (立替払い) | 'ADVANCE_PAYMENT' (事前出金)
-    purchaseMethod: 'WEB', // 'WEB' (Web購入) | 'STORE' (実店舗購入)
+    purchaseMethod: 'WEB', // 'WEB' (Web購入) | 'STORE' (実店舗購入) | 'AMAZON' (Amazon購入)
     category: '',
     details: '',
     remarks: '',
     isRecurring: false,
     recurringFrequency: 'MONTHLY',
+    targetMonth: '',
+    recurringDay: 'END_OF_MONTH',
+    reminderFrequency: '7',
   });
   const [file, setFile] = useState(null);
+  const [amazonInvoice, setAmazonInvoice] = useState(null);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isHighAmount = parseInt(formData.amount, 10) >= 50000;
-  const requiresFileUpload = formData.expenseType === 'ADVANCE_PAYMENT' || (formData.expenseType === 'PAY_OUT_OF_POCKET' && formData.purchaseMethod === 'WEB');
+  const requiresFileUpload = formData.expenseType === 'ADVANCE_PAYMENT' || 
+                             (formData.expenseType === 'PAY_OUT_OF_POCKET' && (formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON'));
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -44,7 +49,12 @@ function ExpenseForm() {
 
     // Validation
     if (requiresFileUpload && !file) {
-      setError(formData.expenseType === 'ADVANCE_PAYMENT' ? '事前出金の場合は、見積書等のファイルのアップロードが必須です。' : 'Web購入の立替払いの場合は、領収書等のファイルのアップロードが必須です。');
+      setError(formData.expenseType === 'ADVANCE_PAYMENT' ? '事前出金の場合は、見積書等のファイルのアップロードが必須です。' : '立替払いの場合は、領収書等のファイルのアップロードが必須です。');
+      return;
+    }
+    
+    if (formData.purchaseMethod === 'AMAZON' && !amazonInvoice) {
+      setError('Amazon購入の場合は、適格請求書（見積書）のアップロードも必須です。');
       return;
     }
 
@@ -66,9 +76,15 @@ function ExpenseForm() {
       submitData.append('isRecurring', formData.isRecurring);
       if(formData.isRecurring) {
         submitData.append('recurringFrequency', formData.recurringFrequency);
+        submitData.append('targetMonth', formData.targetMonth);
+        submitData.append('recurringDay', formData.recurringDay);
       }
+      submitData.append('reminderFrequency', formData.reminderFrequency);
       if (file) {
         submitData.append('receipt', file);
+      }
+      if (amazonInvoice) {
+        submitData.append('amazonInvoice', amazonInvoice);
       }
 
       // await api.post('/expenses', submitData, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -153,6 +169,10 @@ function ExpenseForm() {
                   <input type="radio" name="purchaseMethod" value="STORE" checked={formData.purchaseMethod === 'STORE'} onChange={handleInputChange} />
                   実店舗購入
                 </label>
+                <label className={`radio-label ${formData.purchaseMethod === 'AMAZON' ? 'selected' : ''}`}>
+                  <input type="radio" name="purchaseMethod" value="AMAZON" checked={formData.purchaseMethod === 'AMAZON'} onChange={handleInputChange} />
+                  Amazon購入
+                </label>
               </div>
             </div>
           </div>
@@ -167,6 +187,16 @@ function ExpenseForm() {
             <textarea id="remarks" name="remarks" value={formData.remarks} onChange={handleInputChange} placeholder="特記事項があれば入力してください" rows="2"></textarea>
           </div>
 
+          <div className="form-group">
+            <label htmlFor="reminderFrequency">証憑提出リマインド頻度</label>
+            <select id="reminderFrequency" name="reminderFrequency" value={formData.reminderFrequency} onChange={handleInputChange} className="custom-select">
+              <option value="3">3日ごと</option>
+              <option value="7">7日ごと (デフォルト)</option>
+              <option value="14">14日ごと</option>
+              <option value="0">通知しない</option>
+            </select>
+          </div>
+
           <div className="form-group checkbox-group">
             <label className="checkbox-label">
               <input type="checkbox" name="isRecurring" checked={formData.isRecurring} onChange={handleInputChange} />
@@ -176,7 +206,18 @@ function ExpenseForm() {
 
           {formData.isRecurring && (
             <div className="form-group recurring-options">
-              <label>支払い頻度</label>
+              <label>対象月</label>
+              <input type="month" name="targetMonth" value={formData.targetMonth} onChange={handleInputChange} className="custom-select" />
+              
+              <label style={{marginTop: '15px'}}>支払日指定</label>
+              <select name="recurringDay" value={formData.recurringDay} onChange={handleInputChange} className="custom-select">
+                <option value="END_OF_MONTH">月末</option>
+                {[...Array(31)].map((_, i) => (
+                  <option key={i+1} value={i+1}>{i+1}日</option>
+                ))}
+              </select>
+
+              <label style={{marginTop: '15px'}}>支払い頻度</label>
               <div className="radio-group">
                 <label className={`radio-label ${formData.recurringFrequency === 'MONTHLY' ? 'selected' : ''}`}>
                   <input type="radio" name="recurringFrequency" value="MONTHLY" checked={formData.recurringFrequency === 'MONTHLY'} onChange={handleInputChange} />
@@ -207,6 +248,30 @@ function ExpenseForm() {
                   </div>
                 )}
               </div>
+              
+              {formData.purchaseMethod === 'AMAZON' && (
+                <div style={{marginTop: '20px'}}>
+                  <label>
+                    適格請求書ファイル (Amazon)
+                    <span className="badge-required">必須</span>
+                  </label>
+                  <div className="file-drop-area">
+                    <UploadCloud size={32} className="upload-icon" />
+                    <p>クリックしてファイルを選択するか、ドラッグ＆ドロップしてください</p>
+                    <input type="file" className="file-input" onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setAmazonInvoice(e.target.files[0]);
+                      }
+                    }} accept=".pdf,image/*" />
+                    {amazonInvoice && (
+                      <div className="file-name">
+                        <FileText size={16} />
+                        {amazonInvoice.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
