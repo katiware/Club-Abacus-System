@@ -1,7 +1,6 @@
 using Club_Abacus_System.Data;
 using Club_Abacus_System.Models;
-using Club_Abacus_System.Security;
-using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -10,16 +9,27 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseService, Club_Abacus_System.Services.ExpenseService>();
 
-// --- 権限チェック（認可）の設定 ---
-builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+// --- Identity と Googleログイン の設定 ---
+builder.Services.AddIdentity<User, Role>()
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddDefaultTokenProviders();
 
+builder.Services.AddAuthentication()
+    .AddGoogle(options =>
+    {
+        // TODO: appsettings.json や 環境変数 から読み込むように変更する
+        options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "dummy-client-id";
+        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "dummy-client-secret";
+    });
+
+// --- 権限チェック（認可）の設定 ---
 builder.Services.AddAuthorization(options =>
 {
     // PermissionType Enum のすべての値をポリシーとして自動登録
     foreach (var permission in Enum.GetValues<PermissionType>())
     {
         options.AddPolicy(permission.ToString(), policy =>
-            policy.Requirements.Add(new PermissionRequirement(permission)));
+            policy.RequireClaim("Permission", permission.ToString()));
     }
 });
 
