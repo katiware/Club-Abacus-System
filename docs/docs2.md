@@ -11,7 +11,7 @@
 | role_id | UUID | Foreign Key | 紐づくロールのID（※補完） |
 | email | String | Unique, Not Null | Googleアカウントのアドレス |
 | name | String | Not Null | 氏名 |
-| DiscordID | String | Nullable | ディスコードID |
+
 | is_active | Boolean | Default: true | ログイン可否制御 |
 | created_at | Timestamp | Not Null | 作成日時 |
 | updated_at | Timestamp | Not Null | 更新日時 |
@@ -102,7 +102,7 @@
 | **フロントエンド** | React | ユーザーインターフェース（各種申請画面、管理ダッシュボード等）の構築を担当。 |
 | **バックエンド** | C# (ASP.NET Core) | APIサーバーとして、フロントエンドからのリクエスト処理およびビジネスロジックを実行。 |
 | **データベース** | PostgreSQL | リレーショナルデータの管理（ヘッダー・ディテール構造の帳票データや権限管理など）。C#側からORM（Entity Framework Core等を想定）を介して接続。 |
-| **Discord Bot** | Python | Discord上での通知処理、コマンド操作によるデータ照会、バッチ処理などを担当。 |
+
 | **開発環境** | Google AntiGravity | VS CodeベースのエージェントファーストIDE、または既存VS Code＋AntiGravity拡張機能を利用。各種ランタイム（.NET SDK, Node.js, Python）のローカルインストールを前提とする。 |
 
 ## 3. ディレクトリ構成
@@ -127,9 +127,5 @@ club-budget-management/
 │   ├── appsettings.json   # 環境変数、データベース接続文字列設定
 │   ├── Program.cs         # アプリケーション起動・ミドルウェア設定
 │   └── backend.csproj     # C#プロジェクト設定ファイル
-└── bot/                   # Discord Bot環境 (Python)
-    ├── cogs/              # Botの機能分割モジュール (申請コマンド、通知処理等)
-    ├── utils/             # ヘルパー関数 (画像生成、共通処理等)
-    ├── main.py            # Botのエントリーポイント
-    └── requirements.txt   # Pythonパッケージおよび依存関係管理
+
 ```
