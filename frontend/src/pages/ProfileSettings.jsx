@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Mail, MessageSquare, Save } from 'lucide-react';
+import { ArrowLeft, User, Mail, Save } from 'lucide-react';
 import './ProfileSettings.css';
 
 function ProfileSettings() {
   const navigate = useNavigate();
 
   // Mock user data
-  const [discordId, setDiscordId] = useState('taro_yamada#1234');
   const user = {
     name: '山田 太郎',
     email: 'taro.yamada@example.com',
@@ -46,17 +45,6 @@ function ProfileSettings() {
               <input type="text" value={user.email} readOnly className="form-input bg-gray" />
             </div>
 
-            <div className="form-group">
-              <label><MessageSquare size={16} /> Discord ID</label>
-              <input 
-                type="text" 
-                value={discordId} 
-                onChange={(e) => setDiscordId(e.target.value)} 
-                className="form-input" 
-                placeholder="例: username#1234"
-              />
-              <p className="help-text">システムの通知を個別に受け取るために、Discord IDを登録してください。</p>
-            </div>
 
             <div className="form-actions">
               <button className="primary-btn" onClick={handleSave}>
