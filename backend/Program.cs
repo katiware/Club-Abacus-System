@@ -69,6 +69,32 @@ app.UseSwaggerUI(c =>
 // Configure the HTTP request pipeline.
 app.UseCors();
 
+if (app.Environment.IsDevelopment())
+{
+    // 開発環境専用のモック認証ミドルウェア（本番環境では絶対に入らない）
+    // フロントエンド開発やSwaggerでのテスト時に、常に全権限を持った管理者としてAPIを叩けるようにします
+    app.Use(async (context, next) =>
+    {
+        var claims = new List<System.Security.Claims.Claim>
+        {
+            new("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier", Guid.Empty.ToString()),
+            new("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name", "Dev Admin")
+        };
+
+        // 全てのPermissionを付与
+        foreach (var permission in Enum.GetValues<Club_Abacus_System.Models.PermissionType>())
+        {
+            claims.Add(new("Permission", permission.ToString()));
+        }
+
+        var identity = new System.Security.Claims.ClaimsIdentity(claims, "DevMockAuth");
+        context.User = new System.Security.Claims.ClaimsPrincipal(identity);
+
+        await next(context);
+    });
+}
+
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
