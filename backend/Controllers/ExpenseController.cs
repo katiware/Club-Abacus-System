@@ -1,6 +1,7 @@
 using Club_Abacus_System.Data;
 using Club_Abacus_System.DTOs;
 using Club_Abacus_System.Models;
+using System.Security.Claims;
 using Club_Abacus_System.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -16,10 +17,17 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     /// </summary>
     [HttpPost]
     [RequirePermission(PermissionType.ExpenseManageOwn)]
-    public async Task<ActionResult<ExpenseRequest>> CreateExpenseRequest([FromQuery] Guid userId, [FromBody] ExpenseRequestCreateDto dto)
+    public async Task<ActionResult<ExpenseRequest>> CreateExpenseRequest([FromBody] ExpenseRequestCreateDto dto)
     {
+        // 🚨 セキュリティ対策: クライアントからの入力は無視し、トークンから自身のIDを取得する
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var currentUserId))
+        {
+            return Unauthorized("ユーザー情報が取得できません。");
+        }
+
         // ユーザーが存在するか確認
-        var userExists = await context.Users.AnyAsync(u => u.Id == userId);
+        var userExists = await context.Users.AnyAsync(u => u.Id == currentUserId);
         if (!userExists)
         {
             return BadRequest("指定されたユーザーは存在しません。");
@@ -30,7 +38,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
 
         var expenseRequest = new ExpenseRequest
         {
-            UserId = userId,
+            UserId = currentUserId,
             Type = dto.Type,
             ReceiptType = dto.ReceiptType,
             Status = ExpenseStatus.Draft, // 初期ステータス（下書き）
@@ -80,6 +88,13 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     [RequirePermission(PermissionType.ExpenseManageOwn)]
     public async Task<ActionResult<List<ExpenseRequest>>> GetUserExpenseRequests(Guid userId)
     {
+        // 🚨 セキュリティ対策: 他人の申請一覧の覗き見を防止
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var currentUserId) || userId != currentUserId)
+        {
+            return Forbid("他人の経費申請一覧にはアクセスできません。");
+        }
+
         var requests = await context.ExpenseRequests
             .AsNoTracking()
             .Where(e => e.UserId == userId)
@@ -94,8 +109,15 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     /// </summary>
     [HttpPost("{id}/submit")]
     [RequirePermission(PermissionType.ExpenseManageOwn)]
-    public async Task<IActionResult> SubmitExpenseRequest(Guid id, [FromQuery] Guid userId)
+    public async Task<IActionResult> SubmitExpenseRequest(Guid id)
     {
+        // 🚨 セキュリティ対策: トークンから本人のIDを取得
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var currentUserId))
+        {
+            return Unauthorized("ユーザー情報が取得できません。");
+        }
+
         var expenseRequest = await context.ExpenseRequests.FindAsync(id);
 
         if (expenseRequest == null)
@@ -103,7 +125,8 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             return NotFound("指定された申請が見つかりません。");
         }
 
-        if (expenseRequest.UserId != userId)
+        // 🚨 セキュリティ対策: 偽造可能なuserId変数ではなく、本人のID(currentUserId)と比較する
+        if (expenseRequest.UserId != currentUserId)
         {
             return Forbid("他人の申請を操作することはできません。");
         }
