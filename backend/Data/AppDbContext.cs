@@ -1,25 +1,13 @@
 using Club_Abacus_System.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Club_Abacus_System.Data;
 
 public class AppDbContext(
     DbContextOptions<AppDbContext> options)
-    : DbContext(options)
+    : IdentityDbContext<User, Role, Guid>(options)
 {
-    public DbSet<User> Users => Set<User>();
-
-    public DbSet<Role> Roles => Set<Role>();
-
-    public DbSet<RolePermission> RolePermissions =>
-        Set<RolePermission>();
-
-    public DbSet<UserPermission> UserPermissions =>
-        Set<UserPermission>();
-
-    public DbSet<Permission> Permissions =>
-        Set<Permission>();
-
     public DbSet<AuditLog> AuditLogs =>
         Set<AuditLog>();
 
@@ -52,24 +40,6 @@ public class AppDbContext(
                 document.RequestId,
                 document.DocumentType
             });
-
-        // 複合主キーの設定
-        modelBuilder.Entity<RolePermission>()
-            .HasKey(rp => new { rp.RoleId, rp.PermissionId });
-
-        modelBuilder.Entity<UserPermission>()
-            .HasKey(up => new { up.UserId, up.PermissionId });
-
-        // 一意制約の設定
-        modelBuilder.Entity<Permission>()
-            .HasIndex(p => p.PermissionName)
-            .IsUnique();
-        modelBuilder.Entity<Role>()
-            .HasIndex(p => p.RoleName)
-            .IsUnique();
-        modelBuilder.Entity<User>()
-            .HasIndex(u => u.Email)
-            .IsUnique();
 
         // 定期払いテンプレート削除時の安全設定
         // テンプレートを削除しても、そこから生成された過去の申請データは削除されないようにする
