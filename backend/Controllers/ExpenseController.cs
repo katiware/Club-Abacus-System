@@ -147,11 +147,60 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     }
 
     /// <summary>
-    /// 経費申請のステータスを変更（承認・却下など）します。
+    /// 経費申請の事前承認・却下を行います。
     /// </summary>
-    [HttpPut("{id}/status")]
+    [HttpPut("{id}/approve")]
+    [RequirePermission(PermissionType.ExpenseApprove)]
+    public async Task<IActionResult> ApproveExpenseRequest(Guid id, [FromBody] ExpenseStatusUpdateDto dto)
+    {
+        var expenseRequest = await context.ExpenseRequests.FindAsync(id);
+            
+        if (expenseRequest == null)
+        {
+            return NotFound("指定された申請が見つかりません。");
+        }
+
+        if (dto.Status != ExpenseStatus.Approved && dto.Status != ExpenseStatus.Rejected)
+        {
+            return BadRequest("このAPIでは「承認(Approved)」または「却下(Rejected)」のみ指定可能です。");
+        }
+
+        if (expenseRequest.Status != ExpenseStatus.PendingApproval)
+        {
+            return BadRequest("「承認待ち」の状態からのみ承認・却下が可能です。");
+        }
+
+        expenseRequest.Status = dto.Status;
+        
+        if (dto.Status == ExpenseStatus.Rejected)
+        {
+            expenseRequest.RejectionReason = dto.RejectionReason;
+            expenseRequest.ApprovedById = null;
+            expenseRequest.ApprovedAt = null;
+        }
+        else
+        {
+            expenseRequest.RejectionReason = null;
+            
+            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (Guid.TryParse(userIdString, out var currentUserId))
+            {
+                expenseRequest.ApprovedById = currentUserId;
+                expenseRequest.ApprovedAt = DateTime.UtcNow;
+            }
+        }
+
+        expenseRequest.UpdatedAt = DateTime.UtcNow;
+        await context.SaveChangesAsync();
+        return NoContent();
+    }
+
+    /// <summary>
+    /// 提出された領収書の確認・精算など、事後処理のステータスを変更します。
+    /// </summary>
+    [HttpPut("{id}/confirm")]
     [Authorize]
-    public async Task<IActionResult> UpdateExpenseStatus(Guid id, [FromBody] ExpenseStatusUpdateDto dto)
+    public async Task<IActionResult> ConfirmExpenseReceipt(Guid id, [FromBody] ExpenseStatusUpdateDto dto)
     {
         var expenseRequest = await context.ExpenseRequests
             .Include(e => e.ExpenseDocuments)
@@ -162,62 +211,47 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             return NotFound("指定された申請が見つかりません。");
         }
 
-        // 状態遷移の検証と必要な権限のチェック
-        switch (dto.Status)
+        // 必要な権限のチェック
+        if (!User.HasClaim("Permission", PermissionType.ExpenseConfirmReceipt.ToString()) &&
+            !User.HasClaim("Permission", PermissionType.ExpenseSettle.ToString()))
         {
-            case ExpenseStatus.Approved:
-            case ExpenseStatus.Rejected:
-                if (!User.HasClaim("Permission", PermissionType.ExpenseApprove.ToString()))
-                    return Forbid("申請を承認・却下する権限がありません。");
-                    
-                if (expenseRequest.Status != ExpenseStatus.PendingApproval)
-                    return BadRequest("「承認待ち」の状態からのみ承認・却下が可能です。");
-                break;
-                
-            case ExpenseStatus.WaitingConfirmation:
-            case ExpenseStatus.UniversitySubmitted:
-            case ExpenseStatus.Settled:
-                if (!User.HasClaim("Permission", PermissionType.ExpenseConfirmReceipt.ToString()) &&
-                    !User.HasClaim("Permission", PermissionType.ExpenseSettle.ToString()))
-                    return Forbid("領収書の確認・精算を行う権限がありません。");
-                
-                if (expenseRequest.Status == ExpenseStatus.Draft || expenseRequest.Status == ExpenseStatus.PendingApproval || expenseRequest.Status == ExpenseStatus.Rejected)
-                    return BadRequest("事前承認が完了していないため、このステータスへは進めません。");
-
-                if (expenseRequest.ExpenseDocuments == null || expenseRequest.ExpenseDocuments.Count == 0)
-                    return BadRequest("証憑（領収書等）がアップロードされていないため、このステータスへは進めません。");
-                break;
-
-            default:
-                return BadRequest("無効または許可されていないステータス変更です。");
+            return Forbid("領収書の確認・精算などの操作を行う権限がありません。");
+        }
+        
+        // 承認前・却下済みの場合は操作不可
+        if (expenseRequest.Status == ExpenseStatus.Draft || 
+            expenseRequest.Status == ExpenseStatus.PendingApproval || 
+            expenseRequest.Status == ExpenseStatus.Rejected)
+        {
+            return BadRequest("事前承認が完了していないため、このステータスへは進めません。");
         }
 
-        expenseRequest.Status = dto.Status;
-        
-        // 却下時の処理
-        if (dto.Status == ExpenseStatus.Rejected)
+        // --- ステータス別の詳細バリデーション ---
+        if (dto.Status == ExpenseStatus.Advance_MoneyHandedOver)
         {
-            expenseRequest.RejectionReason = dto.RejectionReason;
-            // 承認履歴をクリア
-            expenseRequest.ApprovedById = null;
-            expenseRequest.ApprovedAt = null;
+            // ① 事前出金の現金手渡し処理
+            if (expenseRequest.Type != ExpenseType.Advance)
+            {
+                return BadRequest("このステータス（事前出金渡し済）は、事前出金の申請に対してのみ使用できます。");
+            }
+            // ※現金手渡し時点では買い物が終わっていないため、領収書画像の必須チェックは行わない
+        }
+        else if (dto.Status == ExpenseStatus.WaitingConfirmation || 
+                 dto.Status == ExpenseStatus.UniversitySubmitted || 
+                 dto.Status == ExpenseStatus.Settled)
+        {
+            // ② 領収書の確認や精算完了の処理（立替・事前出金 共通）
+            if (expenseRequest.ExpenseDocuments == null || expenseRequest.ExpenseDocuments.Count == 0)
+            {
+                return BadRequest("証憑（領収書等）がアップロードされていないため、このステータスへは進めません。");
+            }
         }
         else
         {
-            expenseRequest.RejectionReason = null; // 他のステータスの場合はクリア
+            return BadRequest("このAPIでは事後処理関連のステータスのみ指定可能です。");
         }
 
-        // 承認された場合、承認者と日時を記録
-        if (dto.Status == ExpenseStatus.Approved)
-        {
-            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (Guid.TryParse(userIdString, out var currentUserId))
-            {
-                expenseRequest.ApprovedById = currentUserId;
-                expenseRequest.ApprovedAt = DateTime.UtcNow;
-            }
-        }
-
+        expenseRequest.Status = dto.Status;
         expenseRequest.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync();
