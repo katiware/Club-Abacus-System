@@ -18,8 +18,8 @@ public class AuditLogController(AppDbContext context) : ControllerBase
     [RequirePermission(PermissionType.ViewAuditLogs)]
     public async Task<ActionResult<List<AuditLog>>> GetAuditLogs(
         [FromQuery] string? targetType,
-        [FromBody] Guid? targetId,
-        [FromBody] Guid? userId,
+        [FromQuery] Guid? targetId,
+        [FromQuery] Guid? userId,
         [FromQuery] DateTime? from,
         [FromQuery] DateTime? to)
     {

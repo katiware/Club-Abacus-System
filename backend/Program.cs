@@ -2,24 +2,40 @@ using Club_Abacus_System.Data;
 using Club_Abacus_System.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
 
-// --- Identity と Googleログイン の設定 ---
+// --- Identity と JWT認証 の設定 ---
 builder.Services.AddIdentity<User, Role>()
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
-builder.Services.AddAuthentication()
-    .AddGoogle(options =>
+var jwtKey = builder.Configuration["Jwt:Key"] ?? "super-secret-key-for-development-only-change-in-production";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        // TODO: appsettings.json や 環境変数 から読み込むように変更する
-        options.ClientId = builder.Configuration["Authentication:Google:ClientId"] ?? "dummy-client-id";
-        options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "dummy-client-secret";
-    });
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "ClubAbacusSystem",
+        ValidAudience = builder.Configuration["Jwt:Audience"] ?? "ClubAbacusSystemUsers",
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+    };
+});
 
 // --- 権限チェック（認可）の設定 ---
 builder.Services.AddAuthorization(options =>
@@ -73,6 +89,8 @@ if (app.Environment.IsDevelopment())
 {
     // 開発環境専用のモック認証ミドルウェア（本番環境では絶対に入らない）
     // フロントエンド開発やSwaggerでのテスト時に、常に全権限を持った管理者としてAPIを叩けるようにします
+    // ※ ログイン機能テストのため、一時的にコメントアウト
+    /*
     app.Use(async (context, next) =>
     {
         var claims = new List<System.Security.Claims.Claim>
@@ -92,6 +110,7 @@ if (app.Environment.IsDevelopment())
 
         await next(context);
     });
+    */
 }
 
 app.UseAuthentication();
