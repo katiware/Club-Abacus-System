@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
-import api from '../services/api';
+import AuthService from '../services/AuthService';
 import { LogIn } from 'lucide-react';
 import './Login.css';
 
@@ -12,11 +12,8 @@ function Login() {
   const handleGoogleSuccess = async (credentialResponse) => {
     setError(null);
     try {
-      const response = await api.post('/auth/login', {
-        credential: credentialResponse.credential
-      });
+      const { token, user } = await AuthService.loginWithGoogle(credentialResponse.credential);
       
-      const { token, user } = response.data;
       localStorage.setItem('authToken', token);
       
       // user.Role may be passed from the backend

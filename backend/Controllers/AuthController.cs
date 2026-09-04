@@ -1,8 +1,7 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using Club_Abacus_System.Data;
 using Club_Abacus_System.Models;
+using Club_Abacus_System.Services;
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,7 +12,7 @@ namespace Club_Abacus_System.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController(AppDbContext context, IConfiguration configuration) : ControllerBase
+public class AuthController(AppDbContext context, IJwtTokenService jwtTokenService) : ControllerBase
 {
     [HttpPost("login")]
     [AllowAnonymous]
@@ -51,7 +50,7 @@ public class AuthController(AppDbContext context, IConfiguration configuration) 
             }
 
             // Generate JWT Token
-            var token = GenerateJwtToken(user);
+            var token = jwtTokenService.GenerateJwtToken(user);
 
             return Ok(new
             {
@@ -73,41 +72,6 @@ public class AuthController(AppDbContext context, IConfiguration configuration) 
         {
             return StatusCode(500, new { Message = "ログイン処理中にエラーが発生しました。", Details = ex.Message });
         }
-    }
-
-    private string GenerateJwtToken(User user)
-    {
-        var jwtKey = configuration["Jwt:Key"] ?? "super-secret-key-for-development-only-change-in-production";
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-        var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Name),
-            new Claim(ClaimTypes.Email, user.Email ?? ""),
-            new Claim(ClaimTypes.Role, user.Role.Name)
-        };
-
-        // Add permissions from the role (if stored in DB or logic)
-        // For now, let's grant all permissions if Role is Admin, otherwise basic permissions.
-        var permissions = Enum.GetValues<PermissionType>();
-        foreach (var permission in permissions)
-        {
-            // Just assigning all permissions to everyone for testing, 
-            // In a real app, this should be filtered by user.Role.
-            claims.Add(new Claim("Permission", permission.ToString()));
-        }
-
-        var token = new JwtSecurityToken(
-            issuer: configuration["Jwt:Issuer"] ?? "ClubAbacusSystem",
-            audience: configuration["Jwt:Audience"] ?? "ClubAbacusSystemUsers",
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(7),
-            signingCredentials: creds
-        );
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
 

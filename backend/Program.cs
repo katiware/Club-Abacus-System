@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+builder.Services.AddScoped<Club_Abacus_System.Services.IJwtTokenService, Club_Abacus_System.Services.JwtTokenService>();
 
 // --- Identity と JWT認証 の設定 ---
 builder.Services.AddIdentity<User, Role>()
