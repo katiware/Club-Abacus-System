@@ -153,6 +153,13 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     [RequirePermission(PermissionType.ExpenseApprove)]
     public async Task<IActionResult> ApproveExpenseRequest(Guid id, [FromBody] ExpenseStatusUpdateDto dto)
     {
+        // 誰が承認・却下操作を行ったかを取得（失敗時は処理を中断）
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var currentUserId))
+        {
+            return Unauthorized("ユーザー情報が取得できません。再度ログインしてください。");
+        }
+
         var expenseRequest = await context.ExpenseRequests.FindAsync(id);
             
         if (expenseRequest == null)
@@ -181,13 +188,8 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         else
         {
             expenseRequest.RejectionReason = null;
-            
-            var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (Guid.TryParse(userIdString, out var currentUserId))
-            {
-                expenseRequest.ApprovedById = currentUserId;
-                expenseRequest.ApprovedAt = DateTime.UtcNow;
-            }
+            expenseRequest.ApprovedById = currentUserId;
+            expenseRequest.ApprovedAt = DateTime.UtcNow;
         }
 
         expenseRequest.UpdatedAt = DateTime.UtcNow;
