@@ -6,6 +6,9 @@ namespace Club_Abacus_System.Models;
 
 public class User : IdentityUser<Guid>
 {
+    [Key]
+    public Guid Id { get; set; } = Guid.NewGuid();
+
     [Required]
     public Guid RoleId { get; set; } // 外部キー → Roles
 
