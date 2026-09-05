@@ -31,5 +31,6 @@ public class ExpenseDocument
     public DateTime? DeletedAt { get; set; }
 
     [ForeignKey(nameof(RequestId))]
+    [System.Text.Json.Serialization.JsonIgnore]
     public ExpenseRequest ExpenseRequest { get; set; } = null!;
 }

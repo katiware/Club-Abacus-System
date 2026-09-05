@@ -9,8 +9,15 @@ using System.Text;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 builder.Services.AddScoped<Club_Abacus_System.Services.IJwtTokenService, Club_Abacus_System.Services.JwtTokenService>();
+builder.Services.AddScoped<Club_Abacus_System.Services.IFileStorageService, Club_Abacus_System.Services.LocalFileStorageService>();
+builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseDocumentService, Club_Abacus_System.Services.ExpenseDocumentService>();
 
 // --- Identity と JWT認証 の設定 ---
 builder.Services.AddIdentity<User, Role>()
