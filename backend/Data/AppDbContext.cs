@@ -1,6 +1,9 @@
 using Club_Abacus_System.Models;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Club_Abacus_System.Data;
 
@@ -34,6 +37,12 @@ public class AppDbContext(
     {
         base.OnModelCreating(modelBuilder);
 
+        // 論理削除されたデータを除外するグローバルクエリフィルター
+        modelBuilder.Entity<ExpenseRequest>().HasQueryFilter(e => e.DeletedAt == null);
+        modelBuilder.Entity<ExpenseDocument>().HasQueryFilter(e => e.DeletedAt == null);
+        modelBuilder.Entity<ExpenseItem>().HasQueryFilter(e => e.DeletedAt == null);
+        modelBuilder.Entity<RecurringExpenseTemplate>().HasQueryFilter(e => e.DeletedAt == null);
+
         modelBuilder.Entity<ExpenseDocument>()
             .HasIndex(document => new
             {
@@ -62,5 +71,66 @@ public class AppDbContext(
             .WithMany()
             .HasForeignKey(b => b.FiscalYearId)
             .OnDelete(DeleteBehavior.Restrict);
+    }
+
+    public override int SaveChanges()
+    {
+        ProcessTrackableEntities();
+        return base.SaveChanges();
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        ProcessTrackableEntities();
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void ProcessTrackableEntities()
+    {
+        var entries = ChangeTracker.Entries();
+
+        foreach (var entry in entries)
+        {
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                var updatedAtProperty = entry.Entity.GetType().GetProperty("UpdatedAt");
+                if (updatedAtProperty != null && updatedAtProperty.CanWrite)
+                {
+                    updatedAtProperty.SetValue(entry.Entity, DateTime.UtcNow);
+                }
+            }
+
+            if (entry.State == EntityState.Deleted)
+            {
+                var deletedAtProperty = entry.Entity.GetType().GetProperty("DeletedAt");
+                if (deletedAtProperty != null && deletedAtProperty.CanWrite)
+                {
+                    entry.State = EntityState.Modified;
+                    deletedAtProperty.SetValue(entry.Entity, DateTime.UtcNow);
+
+                    // もしエンティティが ExpenseRequest なら、子要素 (ExpenseItems) も論理削除の対象としてマークします。
+                    // 実際には子要素がナビゲーションプロパティとしてロードされていればマーク可能ですが、
+                    // ロードされていない場合は別途処理が必要になるか、または親を辿ってクエリフィルターで除外する設計にするのが通常です。
+                    // 今回はExpenseItemにもDeletedAtを入れたため、ロードされているものだけ処理します。
+                    if (entry.Entity is ExpenseRequest request)
+                    {
+                        if (request.ExpenseItems != null)
+                        {
+                            foreach (var item in request.ExpenseItems)
+                            {
+                                item.DeletedAt = DateTime.UtcNow;
+                            }
+                        }
+                        if (request.ExpenseDocuments != null)
+                        {
+                            foreach (var doc in request.ExpenseDocuments)
+                            {
+                                doc.DeletedAt = DateTime.UtcNow;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

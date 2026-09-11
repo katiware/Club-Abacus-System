@@ -20,7 +20,6 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
     {
         var templates = await context.RecurringExpenseTemplates
             .AsNoTracking()
-            .Where(t => t.DeletedAt == null)
             .Include(t => t.User)
             .OrderBy(t => t.TemplateName)
             .ToListAsync();
@@ -38,7 +37,7 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         var template = await context.RecurringExpenseTemplates
             .AsNoTracking()
             .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.Id == id && t.DeletedAt == null);
+            .FirstOrDefaultAsync(t => t.Id == id);
 
         if (template == null)
         {
@@ -93,7 +92,7 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
     public async Task<IActionResult> UpdateTemplate(Guid id, [FromBody] RecurringExpenseUpdateDto dto)
     {
         var template = await context.RecurringExpenseTemplates
-            .FirstOrDefaultAsync(t => t.Id == id && t.DeletedAt == null);
+            .FirstOrDefaultAsync(t => t.Id == id);
 
         if (template == null)
         {
@@ -124,7 +123,7 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
     public async Task<IActionResult> DeleteTemplate(Guid id)
     {
         var template = await context.RecurringExpenseTemplates
-            .FirstOrDefaultAsync(t => t.Id == id && t.DeletedAt == null);
+            .FirstOrDefaultAsync(t => t.Id == id);
 
         if (template == null)
         {

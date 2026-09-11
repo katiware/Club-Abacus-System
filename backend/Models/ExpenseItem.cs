@@ -35,6 +35,8 @@ public class ExpenseItem
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    public DateTime? DeletedAt { get; set; }
+
     // --- Navigation Properties ---
 
     [ForeignKey(nameof(RequestId))]
