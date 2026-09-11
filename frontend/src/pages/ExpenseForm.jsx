@@ -65,34 +65,60 @@ function ExpenseForm() {
 
     setIsSubmitting(true);
     try {
-      const submitData = new FormData();
-      submitData.append('title', formData.title);
-      submitData.append('amount', formData.amount);
-      submitData.append('expenseType', formData.expenseType);
-      submitData.append('purchaseMethod', formData.purchaseMethod);
-      submitData.append('category', formData.category);
-      submitData.append('details', formData.details);
-      submitData.append('remarks', formData.remarks);
-      submitData.append('isRecurring', formData.isRecurring);
-      if(formData.isRecurring) {
-        submitData.append('recurringFrequency', formData.recurringFrequency);
-        submitData.append('targetMonth', formData.targetMonth);
-        submitData.append('recurringDay', formData.recurringDay);
-      }
-      submitData.append('reminderFrequency', formData.reminderFrequency);
+      const expenseType = formData.expenseType === 'ADVANCE_PAYMENT' ? 'Advance' : 'Reimbursement';
+      const receiptType = formData.purchaseMethod === 'STORE' ? 'Paper' : 'Digital';
+
+      const requestPayload = {
+        type: expenseType,
+        receiptType: receiptType,
+        expenseItems: [
+          {
+            itemName: formData.title,
+            unitPrice: parseInt(formData.amount, 10),
+            quantity: 1,
+            payee: formData.purchaseMethod === 'AMAZON' ? 'Amazon' : '未指定',
+            category: formData.category,
+            description: [formData.details, formData.remarks].filter(Boolean).join('\n') || null
+          }
+        ]
+      };
+
+      // 1. 経費申請の作成
+      const response = await api.post('/Expense', requestPayload);
+      const createdRequest = response.data;
+      const requestId = createdRequest.id;
+
+      // 2. 証憑ファイルがある場合のみアップロード
       if (file) {
-        submitData.append('receipt', file);
-      }
-      if (amazonInvoice) {
-        submitData.append('amazonInvoice', amazonInvoice);
+        const fileFormData = new FormData();
+        fileFormData.append('file', file);
+        const docType = formData.expenseType === 'ADVANCE_PAYMENT' ? 'Quotation' : 'Receipt';
+        fileFormData.append('documentType', docType);
+
+        await api.post(`/expenses/${requestId}/documents`, fileFormData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
       }
 
-      // await api.post('/expenses', submitData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Amazon購入で適格請求書がある場合のみ追加アップロード
+      if (formData.purchaseMethod === 'AMAZON' && amazonInvoice) {
+        const invoiceFormData = new FormData();
+        invoiceFormData.append('file', amazonInvoice);
+        invoiceFormData.append('documentType', 'Invoice');
+
+        await api.post(`/expenses/${requestId}/documents`, invoiceFormData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+
+      // 3. 申請を提出（PendingApprovalへ進める）
+      await api.post(`/Expense/${requestId}/submit`);
+
       navigate('/dashboard');
     } catch (err) {
       console.error(err);
-      setError('申請の送信に失敗しました。');
+      const errorMsg = err.response?.data?.message || err.response?.data || '申請の送信に失敗しました。';
+      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     } finally {
       setIsSubmitting(false);
     }
