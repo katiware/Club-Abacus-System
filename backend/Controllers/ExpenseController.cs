@@ -6,6 +6,9 @@ using Club_Abacus_System.Security;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.IO;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.StaticFiles;
 
 namespace Club_Abacus_System.Controllers;
 
@@ -18,7 +21,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     /// </summary>
     [HttpPost]
     [RequirePermission(PermissionType.ExpenseManageOwn)]
-    public async Task<ActionResult<ExpenseRequest>> CreateExpenseRequest([FromBody] ExpenseRequestCreateDto dto)
+    public async Task<ActionResult<ExpenseRequest>> CreateExpenseRequest([FromBody] ExpenseRequestCreateDto dto, CancellationToken cancellationToken = default)
     {
         // 🚨 セキュリティ対策: クライアントからの入力は無視し、トークンから自身のIDを取得する
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -28,7 +31,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         }
 
         // ユーザーが存在するか確認
-        var userExists = await context.Users.AnyAsync(u => u.Id == currentUserId);
+        var userExists = await context.Users.AnyAsync(u => u.Id == currentUserId, cancellationToken);
         if (!userExists)
         {
             return BadRequest("指定されたユーザーは存在しません。");
@@ -56,7 +59,16 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         };
 
         context.ExpenseRequests.Add(expenseRequest);
-        await context.SaveChangesAsync();
+
+        context.AuditLogs.Add(new AuditLog
+        {
+            TargetType = "ExpenseRequests",
+            TargetId = expenseRequest.Id,
+            UserId = currentUserId,
+            Action = "CREATE"
+        });
+
+        await context.SaveChangesAsync(cancellationToken);
 
         return CreatedAtAction(nameof(GetExpenseRequestById), new { id = expenseRequest.Id }, expenseRequest);
     }
@@ -66,19 +78,29 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     /// </summary>
     [HttpGet("{id}")]
     [RequirePermission(PermissionType.ExpenseManageOwn)]
-    public async Task<ActionResult<ExpenseRequest>> GetExpenseRequestById(Guid id)
+    public async Task<ActionResult<ExpenseRequest>> GetExpenseRequestById(Guid id, CancellationToken cancellationToken = default)
     {
         var expenseRequest = await context.ExpenseRequests
             .AsNoTracking()
             .Include(e => e.ExpenseItems)
             .Include(e => e.ExpenseDocuments)
-            .FirstOrDefaultAsync(e => e.Id == id);
-            
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+
         if (expenseRequest == null)
         {
             return NotFound("指定された申請が見つかりません。");
         }
-        
+
+        // 🚨 セキュリティ対策: 本人のデータか確認 (承認権限がある場合は閲覧可能とする)
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(userIdString, out var currentUserId))
+        {
+            if (expenseRequest.UserId != currentUserId && !User.HasClaim("Permission", PermissionType.ExpenseApprove.ToString()))
+            {
+                return Forbid("他人の申請を閲覧する権限がありません。");
+            }
+        }
+
         return Ok(expenseRequest);
     }
 
@@ -87,7 +109,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     /// </summary>
     [HttpGet("user/{userId}")]
     [RequirePermission(PermissionType.ExpenseManageOwn)]
-    public async Task<ActionResult<List<ExpenseRequest>>> GetUserExpenseRequests(Guid userId)
+    public async Task<ActionResult<List<ExpenseRequest>>> GetUserExpenseRequests(Guid userId, CancellationToken cancellationToken = default)
     {
         // 🚨 セキュリティ対策: 他人の申請一覧の覗き見を防止
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -100,8 +122,8 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             .AsNoTracking()
             .Where(e => e.UserId == userId)
             .OrderByDescending(e => e.CreatedAt)
-            .ToListAsync();
-            
+            .ToListAsync(cancellationToken);
+
         return Ok(requests);
     }
 
@@ -110,7 +132,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     /// </summary>
     [HttpPost("{id}/submit")]
     [RequirePermission(PermissionType.ExpenseManageOwn)]
-    public async Task<IActionResult> SubmitExpenseRequest(Guid id)
+    public async Task<IActionResult> SubmitExpenseRequest(Guid id, CancellationToken cancellationToken = default)
     {
         // 🚨 セキュリティ対策: トークンから本人のIDを取得
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -119,7 +141,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             return Unauthorized("ユーザー情報が取得できません。");
         }
 
-        var expenseRequest = await context.ExpenseRequests.FindAsync(id);
+        var expenseRequest = await context.ExpenseRequests.FindAsync(new object[] { id }, cancellationToken);
 
         if (expenseRequest == null)
         {
@@ -142,7 +164,15 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         expenseRequest.Status = ExpenseStatus.PendingApproval;
         expenseRequest.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        context.AuditLogs.Add(new AuditLog
+        {
+            TargetType = "ExpenseRequests",
+            TargetId = expenseRequest.Id,
+            UserId = currentUserId,
+            Action = "STATUS_CHANGE_SUBMIT"
+        });
+
+        await context.SaveChangesAsync(cancellationToken);
         return Ok();
     }
 
@@ -151,7 +181,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     /// </summary>
     [HttpPut("{id}/approve")]
     [RequirePermission(PermissionType.ExpenseApprove)]
-    public async Task<IActionResult> ApproveExpenseRequest(Guid id, [FromBody] ExpenseStatusUpdateDto dto)
+    public async Task<IActionResult> ApproveExpenseRequest(Guid id, [FromBody] ExpenseStatusUpdateDto dto, CancellationToken cancellationToken = default)
     {
         // 誰が承認・却下操作を行ったかを取得（失敗時は処理を中断）
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -160,8 +190,8 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             return Unauthorized("ユーザー情報が取得できません。再度ログインしてください。");
         }
 
-        var expenseRequest = await context.ExpenseRequests.FindAsync(id);
-            
+        var expenseRequest = await context.ExpenseRequests.FindAsync(new object[] { id }, cancellationToken);
+
         if (expenseRequest == null)
         {
             return NotFound("指定された申請が見つかりません。");
@@ -178,7 +208,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         }
 
         expenseRequest.Status = dto.Status;
-        
+
         if (dto.Status == ExpenseStatus.Rejected)
         {
             expenseRequest.RejectionReason = dto.RejectionReason;
@@ -192,8 +222,15 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             expenseRequest.ApprovedAt = DateTime.UtcNow;
         }
 
-        expenseRequest.UpdatedAt = DateTime.UtcNow;
-        await context.SaveChangesAsync();
+        context.AuditLogs.Add(new AuditLog
+        {
+            TargetType = "ExpenseRequests",
+            TargetId = expenseRequest.Id,
+            UserId = currentUserId,
+            Action = $"STATUS_CHANGE_{dto.Status.ToString().ToUpper()}"
+        });
+
+        await context.SaveChangesAsync(cancellationToken);
         return NoContent();
     }
 
@@ -202,12 +239,12 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     /// </summary>
     [HttpPut("{id}/confirm")]
     [Authorize]
-    public async Task<IActionResult> ConfirmExpenseReceipt(Guid id, [FromBody] ExpenseStatusUpdateDto dto)
+    public async Task<IActionResult> ConfirmExpenseReceipt(Guid id, [FromBody] ExpenseStatusUpdateDto dto, CancellationToken cancellationToken = default)
     {
         var expenseRequest = await context.ExpenseRequests
             .Include(e => e.ExpenseDocuments)
-            .FirstOrDefaultAsync(e => e.Id == id);
-            
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+
         if (expenseRequest == null)
         {
             return NotFound("指定された申請が見つかりません。");
@@ -219,10 +256,10 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         {
             return Forbid("領収書の確認・精算などの操作を行う権限がありません。");
         }
-        
+
         // 承認前・却下済みの場合は操作不可
-        if (expenseRequest.Status == ExpenseStatus.Draft || 
-            expenseRequest.Status == ExpenseStatus.PendingApproval || 
+        if (expenseRequest.Status == ExpenseStatus.Draft ||
+            expenseRequest.Status == ExpenseStatus.PendingApproval ||
             expenseRequest.Status == ExpenseStatus.Rejected)
         {
             return BadRequest("事前承認が完了していないため、このステータスへは進めません。");
@@ -238,8 +275,8 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             }
             // ※現金手渡し時点では買い物が終わっていないため、領収書画像の必須チェックは行わない
         }
-        else if (dto.Status == ExpenseStatus.WaitingConfirmation || 
-                 dto.Status == ExpenseStatus.UniversitySubmitted || 
+        else if (dto.Status == ExpenseStatus.WaitingConfirmation ||
+                 dto.Status == ExpenseStatus.UniversitySubmitted ||
                  dto.Status == ExpenseStatus.Settled)
         {
             // ② 領収書の確認や精算完了の処理（立替・事前出金 共通）
@@ -254,9 +291,110 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         }
 
         expenseRequest.Status = dto.Status;
-        expenseRequest.UpdatedAt = DateTime.UtcNow;
 
-        await context.SaveChangesAsync();
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(userIdString, out var currentUserId))
+        {
+            context.AuditLogs.Add(new AuditLog
+            {
+                TargetType = "ExpenseRequests",
+                TargetId = expenseRequest.Id,
+                UserId = currentUserId,
+                Action = $"STATUS_CHANGE_{dto.Status.ToString().ToUpper()}"
+            });
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>
+    /// 複数の経費申請の金種計算を行います。
+    /// （個別の申請ごとに必要な金種を計算し、その結果を合算します）
+    /// </summary>
+    [HttpPost("calculate-denominations")]
+    [RequirePermission(PermissionType.ExpenseSettle)]
+    public async Task<ActionResult<DenominationResultDto>> CalculateDenominations([FromBody] List<Guid> expenseIds, CancellationToken cancellationToken = default)
+    {
+        var expenses = await context.ExpenseRequests
+            .Where(e => expenseIds.Contains(e.Id))
+            .ToListAsync(cancellationToken);
+
+        if (!expenses.Any()) return NotFound("指定された申請が見つかりません。");
+
+        var totalResult = new DenominationResultDto();
+
+        foreach (var expense in expenses)
+        {
+            var result = CalculateDenominationForAmount(expense.TotalAmount);
+            totalResult.Add(result);
+        }
+
+        return Ok(totalResult);
+    }
+
+    /// <summary>
+    /// 特定の月（1ヶ月分）の経費申請すべてを対象に金種計算をまとめて行います。
+    /// </summary>
+    [HttpGet("denominations/monthly")]
+    [RequirePermission(PermissionType.ExpenseSettle)]
+    public async Task<ActionResult<DenominationResultDto>> GetMonthlyDenominations(int year, int month, CancellationToken cancellationToken = default)
+    {
+        // 指定された年月の月初と翌月初を取得
+        var startDate = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var endDate = startDate.AddMonths(1);
+
+        // 指定月に作成された申請のうち、有効なもの（下書き・却下以外）を取得します。
+        // ※ 運用ロジック:
+        // 「事前出金 (Advance)」は「承認済 (Approved)」が手渡し待ち
+        // 「立替 (Reimbursement)」は「大学へ申請完了 (UniversitySubmitted)」の後に精算するルールと仮定します。
+        // さらに、Createdではなくステータス更新日(UpdatedAt)で期間を絞り込みます。
+        var expenses = await context.ExpenseRequests
+            .Where(e => e.UpdatedAt >= startDate && e.UpdatedAt < endDate)
+            .Where(e => (e.Type == ExpenseType.Advance && e.Status == ExpenseStatus.Approved) ||
+                        (e.Type == ExpenseType.Reimbursement && e.Status == ExpenseStatus.UniversitySubmitted))
+            .ToListAsync(cancellationToken);
+
+        var totalResult = new DenominationResultDto();
+
+        foreach (var expense in expenses)
+        {
+            var result = CalculateDenominationForAmount(expense.TotalAmount);
+            totalResult.Add(result);
+        }
+
+        return Ok(totalResult);
+    }
+
+    /// <summary>
+    /// 特定の経費申請1件の金種計算を行います。
+    /// </summary>
+    [HttpGet("{id}/denominations")]
+    [RequirePermission(PermissionType.ExpenseSettle)]
+    public async Task<ActionResult<DenominationResultDto>> GetDenominationForRequest(Guid id, CancellationToken cancellationToken = default)
+    {
+        var expense = await context.ExpenseRequests.FindAsync(new object[] { id }, cancellationToken);
+        if (expense == null) return NotFound("指定された申請が見つかりません。");
+
+        var result = CalculateDenominationForAmount(expense.TotalAmount);
+        return Ok(result);
+    }
+
+    private DenominationResultDto CalculateDenominationForAmount(int amount)
+    {
+        var result = new DenominationResultDto { TotalAmount = amount };
+        int remaining = amount;
+
+        result.TenThousand = remaining / 10000; remaining %= 10000;
+        result.FiveThousand = remaining / 5000; remaining %= 5000;
+        result.OneThousand = remaining / 1000; remaining %= 1000;
+        result.FiveHundred = remaining / 500; remaining %= 500;
+        result.OneHundred = remaining / 100; remaining %= 100;
+        result.Fifty = remaining / 50; remaining %= 50;
+        result.Ten = remaining / 10; remaining %= 10;
+        result.Five = remaining / 5; remaining %= 5;
+        result.One = remaining;
+
+        return result;
     }
 }
