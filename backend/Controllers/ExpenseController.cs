@@ -14,7 +14,7 @@ namespace Club_Abacus_System.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ExpenseController(AppDbContext context, Club_Abacus_System.Services.IFileStorageService fileStorageService) : ControllerBase
+public class ExpenseController(AppDbContext context) : ControllerBase
 {
     /// <summary>
     /// 新規の経費申請（明細含む）を作成します。
