@@ -162,6 +162,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
 
         // ステータスを「承認待ち」に進める
         expenseRequest.Status = ExpenseStatus.PendingApproval;
+        expenseRequest.UpdatedAt = DateTime.UtcNow;
 
         context.AuditLogs.Add(new AuditLog
         {
