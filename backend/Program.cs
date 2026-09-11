@@ -93,6 +93,16 @@ app.UseSwaggerUI(c =>
 // Configure the HTTP request pipeline.
 app.UseCors();
 
+app.UseExceptionHandler(errorApp =>
+{
+    errorApp.Run(async context =>
+    {
+        context.Response.StatusCode = 500;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsJsonAsync(new { error = "サーバー内部で予期せぬエラーが発生しました。" });
+    });
+});
+
 if (app.Environment.IsDevelopment())
 {
     // 開発環境専用のモック認証ミドルウェア（本番環境では絶対に入らない）
