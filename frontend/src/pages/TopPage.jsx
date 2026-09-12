@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, Plus, Settings, Calculator, FileText, AlertTriangle, Users, BookOpen, Clock, User, Shield } from 'lucide-react';
+import api from '../services/api';
 import './TopPage.css';
 
 function TopPage() {
@@ -13,8 +14,25 @@ function TopPage() {
     navigate('/login');
   };
 
-  // Mock data for overdue items
-  const overdueCount = 1;
+  const [summaryData, setSummaryData] = useState({
+    pendingCount: 0,
+    overdueCount: 0,
+    budgetBalance: 0
+  });
+
+  useEffect(() => {
+    const fetchSummary = async () => {
+      try {
+        const response = await api.get('/Expense/summary');
+        setSummaryData(response.data);
+      } catch (err) {
+        console.error('Failed to fetch summary data', err);
+      }
+    };
+    fetchSummary();
+  }, []);
+
+  const { pendingCount, overdueCount, budgetBalance } = summaryData;
 
   return (
     <div className="top-page-container">
@@ -53,7 +71,7 @@ function TopPage() {
           <div className="dashboard-widgets">
             <div className="widget-card">
               <h3>承認待ちの申請</h3>
-              <p className="widget-value">3 件</p>
+              <p className="widget-value">{pendingCount} 件</p>
             </div>
             <div className="widget-card">
               <h3>未報告のアラート</h3>
@@ -62,7 +80,7 @@ function TopPage() {
             {userRole === 'ADMIN' && (
               <div className="widget-card">
                 <h3>今年度予算残高</h3>
-                <p className="widget-value">¥125,000</p>
+                <p className="widget-value">¥{budgetBalance.toLocaleString()}</p>
               </div>
             )}
           </div>
@@ -115,6 +133,10 @@ function TopPage() {
                 <button onClick={() => navigate('/recurring-payments')} className="menu-btn admin-btn">
                   <Clock size={24} />
                   <span>定期支払い管理</span>
+                </button>
+                <button onClick={() => navigate('/fiscal-years')} className="menu-btn admin-btn">
+                  <Calculator size={24} />
+                  <span>年度・予算管理</span>
                 </button>
                 <button onClick={() => navigate('/admin-settings')} className="menu-btn admin-btn">
                   <Settings size={24} />

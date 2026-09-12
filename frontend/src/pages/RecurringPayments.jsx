@@ -1,68 +1,113 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Clock, Edit2, Trash2, Play, Pause } from 'lucide-react';
+import { Plus, Clock, Trash2, Play, Pause, Settings, Calendar } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
+import api from '../services/api';
 import './RecurringPayments.css';
 
 function RecurringPayments() {
   const navigate = useNavigate();
 
-  const [templates, setTemplates] = useState([
-    { id: 'TPL-001', name: 'AWSサーバー代', amount: 12500, frequency: '毎月', nextDate: '2026-09-01', active: true },
-    { id: 'TPL-002', name: '部室インターネット回線', amount: 5500, frequency: '毎月', nextDate: '2026-09-01', active: true },
-    { id: 'TPL-003', name: 'ドメイン更新料 (example.com)', amount: 1500, frequency: '毎年', nextDate: '2027-04-01', active: false },
-  ]);
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const toggleStatus = (id) => {
-    setTemplates(templates.map(t => t.id === id ? { ...t, active: !t.active } : t));
-  };
-
-  const handleDelete = (id, name) => {
-    if (window.confirm(`${name} の定期支払いテンプレートを削除しますか？`)) {
-      setTemplates(templates.filter(t => t.id !== id));
+  const fetchTemplates = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/RecurringExpense');
+      setTemplates(res.data);
+    } catch (err) {
+      console.error('Failed to fetch recurring templates', err);
+      setError('テンプレートの取得に失敗しました。管理者権限が必要です。');
+    } finally {
+      setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+
+  const toggleStatus = async (id, currentStatus) => {
+    // 0: Active, 1: Inactive
+    const newStatus = currentStatus === 0 || currentStatus === 'Active' ? 1 : 0;
+    try {
+      await api.put(`/RecurringExpense/${id}`, {
+        templateStatus: newStatus
+      });
+      await fetchTemplates();
+    } catch (err) {
+      console.error('Failed to toggle status', err);
+      alert('ステータスの変更に失敗しました。');
+    }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (window.confirm(`${name} の定期支払いテンプレートを削除しますか？`)) {
+      try {
+        await api.delete(`/RecurringExpense/${id}`);
+        await fetchTemplates();
+      } catch (err) {
+        console.error('Failed to delete template', err);
+        alert('テンプレートの削除に失敗しました。');
+      }
+    }
+  };
+
+  const getFreqString = (freq) => freq === 'Monthly' || freq === 0 ? '毎月' : '毎年';
+  const isActive = (status) => status === 'Active' || status === 0;
 
   return (
     <div className="recurring-payments-container fade-in">
       <PageHeader title="定期支払い管理" backTo="/top">
-        <button className="primary-btn">
+        <button className="primary-btn" onClick={() => alert('新規作成UIは未実装です')}>
           <Plus size={18} />
           新規テンプレート作成
         </button>
       </PageHeader>
 
       <main className="page-content bg-transparent p-0 shadow-none">
-        <div className="template-grid">
-          {templates.map(tpl => (
-            <div key={tpl.id} className={`template-card ${!tpl.active ? 'inactive' : ''}`}>
-              <div className="tpl-header">
-                <div className="tpl-badge">{tpl.frequency}</div>
-                <div className="tpl-actions">
-                  <button className="icon-btn" title="編集"><Settings size={16} /></button>
-                  <button className="icon-btn danger-text" onClick={() => handleDelete(tpl.id, tpl.name)} title="削除"><Trash2 size={16} /></button>
-                </div>
-              </div>
-              <h3 className="tpl-title">{tpl.name}</h3>
-              <div className="tpl-amount">¥{tpl.amount.toLocaleString()}</div>
-              
-              <div className="tpl-meta">
-                <Calendar size={14} />
-                次回生成日: <strong>{tpl.nextDate}</strong>
-              </div>
+        {error && <div className="p-4 bg-white rounded-lg shadow text-red-500 text-center mb-4">{error}</div>}
+        
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">読み込み中...</div>
+        ) : templates.length === 0 && !error ? (
+          <div className="p-8 bg-white rounded-lg shadow text-center text-gray-500">定期支払いテンプレートがありません。</div>
+        ) : (
+          <div className="template-grid">
+            {templates.map(tpl => {
+              const active = isActive(tpl.templateStatus);
+              return (
+                <div key={tpl.id} className={`template-card ${!active ? 'inactive' : ''}`}>
+                  <div className="tpl-header">
+                    <div className="tpl-badge">{getFreqString(tpl.recurringFrequency)}</div>
+                    <div className="tpl-actions">
+                      <button className="icon-btn danger-text" onClick={() => handleDelete(tpl.id, tpl.templateName)} title="削除"><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                  <h3 className="tpl-title">{tpl.templateName}</h3>
+                  <div className="tpl-amount">¥{tpl.amount.toLocaleString()}</div>
+                  
+                  <div className="tpl-meta">
+                    <Calendar size={14} />
+                    次回生成日: <strong>{tpl.nextGenerationDate}</strong>
+                  </div>
 
-              <div className="tpl-footer">
-                <button 
-                  className={`status-toggle-btn ${tpl.active ? 'active' : 'paused'}`}
-                  onClick={() => toggleStatus(tpl.id)}
-                >
-                  {tpl.active ? <Pause size={16} /> : <Play size={16} />}
-                  {tpl.active ? '一時停止する' : '再開する'}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+                  <div className="tpl-footer">
+                    <button 
+                      className={`status-toggle-btn ${active ? 'active' : 'paused'}`}
+                      onClick={() => toggleStatus(tpl.id, tpl.templateStatus)}
+                    >
+                      {active ? <Pause size={16} /> : <Play size={16} />}
+                      {active ? '一時停止する' : '再開する'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </main>
     </div>
   );
