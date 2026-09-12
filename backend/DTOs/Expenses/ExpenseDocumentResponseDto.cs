@@ -1,6 +1,6 @@
 using Club_Abacus_System.Models;
 
-namespace Club_Abacus_System.DTOs;
+namespace Club_Abacus_System.DTOs.Expenses;
 
 public class ExpenseDocumentResponseDto
 {

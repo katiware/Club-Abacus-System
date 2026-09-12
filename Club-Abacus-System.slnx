@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/AppHost/">
+    <Project Path="AppHost/ClubAbacusSystem.AppHost.csproj" />
+  </Folder>
+  <Folder Name="/backend/">
+    <Project Path="backend/Club-Abacus-System.csproj" />
+  </Folder>
+  <Folder Name="/ServiceDefaults/">
+    <Project Path="ServiceDefaults/ClubAbacusSystem.ServiceDefaults.csproj" />
+  </Folder>
+</Solution>

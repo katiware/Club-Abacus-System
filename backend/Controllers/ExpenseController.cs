@@ -1,5 +1,12 @@
 using Club_Abacus_System.Data;
 using Club_Abacus_System.DTOs;
+using Club_Abacus_System.DTOs.Expenses;
+using Club_Abacus_System.DTOs.FiscalYears;
+using Club_Abacus_System.DTOs.RecurringExpenses;
+using Club_Abacus_System.DTOs.Roles;
+using Club_Abacus_System.DTOs.Submissions;
+using Club_Abacus_System.DTOs.System;
+using Club_Abacus_System.DTOs.Users;
 using Club_Abacus_System.Models;
 using System.Security.Claims;
 using Club_Abacus_System.Security;
@@ -197,6 +204,12 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             return NotFound("指定された申請が見つかりません。");
         }
 
+        // 🚨 セキュリティ対策: 自分の申請は自分で承認・却下できないようにする
+        if (expenseRequest.UserId == currentUserId)
+        {
+            return Forbid("自分の申請を自分で承認・却下することはできません。");
+        }
+
         if (dto.Status != ExpenseStatus.Approved && dto.Status != ExpenseStatus.Rejected)
         {
             return BadRequest("このAPIでは「承認(Approved)」または「却下(Rejected)」のみ指定可能です。");
@@ -250,6 +263,12 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             return NotFound("指定された申請が見つかりません。");
         }
 
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(userIdString, out var currentUserId) && expenseRequest.UserId == currentUserId)
+        {
+            return Forbid("自分の申請に対する事後処理（確認・精算等）を自分で行うことはできません。");
+        }
+
         // 必要な権限のチェック
         if (!User.HasClaim("Permission", PermissionType.ExpenseConfirmReceipt.ToString()) &&
             !User.HasClaim("Permission", PermissionType.ExpenseSettle.ToString()))
@@ -292,8 +311,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
 
         expenseRequest.Status = dto.Status;
 
-        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (Guid.TryParse(userIdString, out var currentUserId))
+        if (currentUserId != Guid.Empty)
         {
             context.AuditLogs.Add(new AuditLog
             {

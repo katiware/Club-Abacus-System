@@ -22,4 +22,8 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\ServiceDefaults\ClubAbacusSystem.ServiceDefaults.csproj" />
+  </ItemGroup>
+
 </Project>

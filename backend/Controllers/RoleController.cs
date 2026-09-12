@@ -1,5 +1,12 @@
 using System.Security.Claims;
 using Club_Abacus_System.DTOs;
+using Club_Abacus_System.DTOs.Expenses;
+using Club_Abacus_System.DTOs.FiscalYears;
+using Club_Abacus_System.DTOs.RecurringExpenses;
+using Club_Abacus_System.DTOs.Roles;
+using Club_Abacus_System.DTOs.Submissions;
+using Club_Abacus_System.DTOs.System;
+using Club_Abacus_System.DTOs.Users;
 using Club_Abacus_System.Models;
 using Club_Abacus_System.Security;
 using Microsoft.AspNetCore.Identity;

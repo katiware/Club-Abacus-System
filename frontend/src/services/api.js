@@ -1,8 +1,11 @@
 import axios from 'axios';
 
 // Create an Axios instance with base configuration
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
+const apiUrl = rawBaseUrl ? `${rawBaseUrl}/api` : 'http://localhost:5000/api';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api', // Adjust if backend runs on a different port
+  baseURL: apiUrl,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -25,7 +28,10 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     // Handle global errors here (e.g., 401 Unauthorized -> redirect to login)
-    if (error.response?.status === 401) {
+    // But don't redirect if we are already trying to login!
+    const isAuthUrl = error.config?.url?.includes('/auth/login');
+    
+    if (error.response?.status === 401 && !isAuthUrl) {
       localStorage.removeItem('authToken');
       window.location.href = '/login';
     }
