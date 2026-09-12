@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Search, Filter, Eye } from 'lucide-react';
+import { ArrowLeft, Search, Filter, Eye, Download } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './AllApplications.css';
 
 function AllApplications() {
@@ -34,13 +35,12 @@ function AllApplications() {
 
   return (
     <div className="all-applications-container fade-in">
-      <header className="page-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          ダッシュボードへ戻る
+      <PageHeader title="全申請一覧（台帳）" backTo="/top">
+        <button className="secondary-btn">
+          <Download size={18} />
+          CSV出力
         </button>
-        <h1>台帳管理 (全ての申請)</h1>
-      </header>
+      </PageHeader>
 
       <main className="page-content">
         <div className="controls-bar">

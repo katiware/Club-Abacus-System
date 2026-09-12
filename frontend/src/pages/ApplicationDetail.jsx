@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle, XCircle, FileImage, Download, Clock, UploadCloud, FileText, ExternalLink } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import api from '../services/api';
 import './ApplicationDetail.css';
 
@@ -189,15 +190,9 @@ function ApplicationDetail() {
 
   return (
     <div className="application-detail-container fade-in">
-      <header className="page-header">
-        <button onClick={() => navigate(-1)} className="back-button">
-          <ArrowLeft size={20} />
-          戻る
-        </button>
-        <h1>申請詳細 ({app.id})</h1>
-        <div className="header-spacer"></div>
+      <PageHeader title={`申請詳細 (${app.id})`} backTo="/top">
         {renderStatusBadge(app.status)}
-      </header>
+      </PageHeader>
 
       <main className="detail-layout">
         <div className="detail-main-col">

@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
+import TopPage from './pages/TopPage';
 import ExpenseForm from './pages/ExpenseForm';
 import Admin from './pages/Admin';
 import Calculator from './pages/Calculator';
@@ -28,8 +28,8 @@ const AdminRoute = ({ children }) => {
   
   if (!token) return <Navigate to="/login" replace />;
   if (userRole !== 'ADMIN') {
-    alert('管理者権限が必要です。ダッシュボードに戻ります。');
-    return <Navigate to="/dashboard" replace />;
+    alert('管理者権限が必要です。トップ画面に戻ります。');
+    return <Navigate to="/top" replace />;
   }
   return children;
 };
@@ -38,13 +38,13 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<Navigate to="/top" replace />} />
         <Route path="/login" element={<Login />} />
         <Route 
-          path="/dashboard" 
+          path="/top" 
           element={
             <PrivateRoute>
-              <Dashboard />
+              <TopPage />
             </PrivateRoute>
           } 
         />
@@ -129,7 +129,7 @@ function App() {
           } 
         />
         {/* Fallback route */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/top" replace />} />
       </Routes>
     </BrowserRouter>
   );

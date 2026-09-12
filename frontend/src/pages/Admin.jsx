@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, FileText, XCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle, FileText, XCircle, Trash2, AlertTriangle } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './Admin.css';
 
 function Admin() {
@@ -101,13 +102,7 @@ function Admin() {
 
   return (
     <div className="admin-container">
-      <header className="admin-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          ダッシュボードへ戻る
-        </button>
-        <h1>管理画面 - 未処理タスク一覧</h1>
-      </header>
+      <PageHeader title="管理画面 - 未処理タスク一覧" backTo="/top" />
 
       <main className="admin-content">
         {isLoading ? (

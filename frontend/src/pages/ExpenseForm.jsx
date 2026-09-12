@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { FileText, ArrowLeft, UploadCloud, AlertTriangle } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './ExpenseForm.css';
 
 function ExpenseForm() {
@@ -126,13 +127,7 @@ function ExpenseForm() {
 
   return (
     <div className="expense-container">
-      <header className="expense-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          戻る
-        </button>
-        <h1>新規経費申請</h1>
-      </header>
+      <PageHeader title="新規経費申請" backTo="/top" />
 
       <main className="expense-content">
         <form className="expense-form" onSubmit={handleSubmit}>

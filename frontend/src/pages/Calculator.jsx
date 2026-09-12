@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calculator as CalcIcon } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './Calculator.css';
 
 const DENOMINATIONS = [
@@ -58,13 +59,10 @@ function Calculator() {
 
   return (
     <div className="calc-container">
-      <header className="calc-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          ダッシュボードへ戻る
-        </button>
-        <h1><CalcIcon size={20} className="header-icon" /> 金種計算（出金準備）</h1>
-      </header>
+      <PageHeader 
+        title={<><CalcIcon size={20} className="header-icon" /> 金種計算（現金準備用）</>} 
+        backTo="/top" 
+      />
 
       <main className="calc-content">
         <div className="calc-grid">

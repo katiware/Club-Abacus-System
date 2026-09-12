@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Save, Bell, AlertTriangle } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './AdminSettings.css';
 
 function AdminSettings() {
@@ -24,13 +25,12 @@ function AdminSettings() {
 
   return (
     <div className="admin-settings-container fade-in">
-      <header className="page-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          戻る
+      <PageHeader title="管理者設定" backTo="/top">
+        <button className="primary-btn" onClick={handleSaveSettings}>
+          <Save size={18} />
+          設定を保存
         </button>
-        <h1>管理者設定</h1>
-      </header>
+      </PageHeader>
 
       <main className="settings-grid">
         {/* System Settings Card */}
