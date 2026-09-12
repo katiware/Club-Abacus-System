@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, UserPlus, Shield, ShieldOff, Trash2, Check, X } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './UserManagement.css';
 
 function UserManagement() {
@@ -33,18 +34,12 @@ function UserManagement() {
 
   return (
     <div className="user-management-container fade-in">
-      <header className="page-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          戻る
-        </button>
-        <h1>部員管理</h1>
-        <div className="header-spacer"></div>
+      <PageHeader title="部員管理" backTo="/top">
         <button className="primary-btn">
           <UserPlus size={18} />
           新規部員追加
         </button>
-      </header>
+      </PageHeader>
 
       <main className="page-content">
         <div className="table-wrapper">

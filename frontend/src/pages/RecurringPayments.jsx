@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Calendar, Settings, Play, Pause, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Clock, Edit2, Trash2, Play, Pause } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './RecurringPayments.css';
 
 function RecurringPayments() {
@@ -24,18 +25,12 @@ function RecurringPayments() {
 
   return (
     <div className="recurring-payments-container fade-in">
-      <header className="page-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          戻る
-        </button>
-        <h1>定期支払い管理</h1>
-        <div className="header-spacer"></div>
+      <PageHeader title="定期支払い管理" backTo="/top">
         <button className="primary-btn">
           <Plus size={18} />
-          新規テンプレート
+          新規テンプレート作成
         </button>
-      </header>
+      </PageHeader>
 
       <main className="page-content bg-transparent p-0 shadow-none">
         <div className="template-grid">

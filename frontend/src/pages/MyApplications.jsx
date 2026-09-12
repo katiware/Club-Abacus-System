@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, UploadCloud, CheckCircle, Clock } from 'lucide-react';
+import { ArrowLeft, FileText, UploadCloud, CheckCircle, Clock, Plus, Download, Eye, Paperclip, AlertCircle, Search } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './MyApplications.css';
 
 function MyApplications() {
@@ -123,13 +124,7 @@ function MyApplications() {
 
   return (
     <div className="my-apps-container">
-      <header className="my-apps-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          ダッシュボードへ戻る
-        </button>
-        <h1>申請履歴・証憑提出</h1>
-      </header>
+      <PageHeader title="申請履歴・証憑提出" backTo="/top" />
 
       <main className="my-apps-content">
         {isLoading ? (

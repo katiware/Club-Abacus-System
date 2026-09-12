@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, User, Mail, Save } from 'lucide-react';
+import { PageHeader } from '../components/PageHeader';
 import './ProfileSettings.css';
 
 function ProfileSettings() {
@@ -19,13 +20,7 @@ function ProfileSettings() {
 
   return (
     <div className="profile-settings-container fade-in">
-      <header className="page-header">
-        <button onClick={() => navigate('/dashboard')} className="back-button">
-          <ArrowLeft size={20} />
-          戻る
-        </button>
-        <h1>プロフィール設定</h1>
-      </header>
+      <PageHeader title="プロフィール設定" backTo="/top" />
 
       <main className="profile-content">
         <div className="profile-card">

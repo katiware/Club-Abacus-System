@@ -26,7 +26,7 @@ function Login() {
       if (role) {
         localStorage.setItem('userRole', role);
       }
-      navigate('/dashboard', { replace: true });
+      navigate('/top', { replace: true });
     } else if (errorParam === 'not_registered' && credential) {
       setPendingCredential(credential);
       // Remove params from URL for clean UI
@@ -48,7 +48,7 @@ function Login() {
         localStorage.setItem('userRole', user.role);
       }
       
-      navigate('/dashboard');
+      navigate('/top');
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.message || '登録に失敗しました。');
