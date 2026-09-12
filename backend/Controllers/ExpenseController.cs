@@ -24,6 +24,30 @@ namespace Club_Abacus_System.Controllers;
 public class ExpenseController(AppDbContext context) : ControllerBase
 {
     /// <summary>
+    /// ダッシュボード用の集計データを取得します。
+    /// </summary>
+    [HttpGet("summary")]
+    [Authorize] // 誰でも見れるが、権限によって内容を変えることも可能
+    public async Task<ActionResult<ExpenseSummaryDto>> GetSummary(CancellationToken cancellationToken = default)
+    {
+        var pendingCount = await context.ExpenseRequests
+            .Where(e => e.Status == ExpenseStatus.PendingApproval || e.Status == ExpenseStatus.WaitingConfirmation)
+            .CountAsync(cancellationToken);
+
+        // TODO: 本格的な予算残高の計算ロジック（とりあえず固定値）
+        var budgetBalance = 125000m; 
+
+        // TODO: 期限切れの計算（事前出金で未精算かつ期日超過のものなど。とりあえず固定値）
+        var overdueCount = 0;
+
+        return Ok(new ExpenseSummaryDto
+        {
+            PendingCount = pendingCount,
+            OverdueCount = overdueCount,
+            BudgetBalance = budgetBalance
+        });
+    }
+    /// <summary>
     /// 新規の経費申請（明細含む）を作成します。
     /// </summary>
     [HttpPost]
@@ -89,6 +113,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     {
         var expenseRequest = await context.ExpenseRequests
             .AsNoTracking()
+            .Include(e => e.User)
             .Include(e => e.ExpenseItems)
             .Include(e => e.ExpenseDocuments)
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
@@ -112,22 +137,37 @@ public class ExpenseController(AppDbContext context) : ControllerBase
     }
 
     /// <summary>
-    /// 特定ユーザーの経費申請一覧を取得します。
+    /// 全ての経費申請一覧を取得します（管理者用）。
     /// </summary>
-    [HttpGet("user/{userId}")]
-    [RequirePermission(PermissionType.ExpenseManageOwn)]
-    public async Task<ActionResult<List<ExpenseRequest>>> GetUserExpenseRequests(Guid userId, CancellationToken cancellationToken = default)
+    [HttpGet("all")]
+    [RequirePermission(PermissionType.ExpenseReadAll)]
+    public async Task<ActionResult<List<ExpenseRequest>>> GetAllExpenseRequests(CancellationToken cancellationToken = default)
     {
-        // 🚨 セキュリティ対策: 他人の申請一覧の覗き見を防止
+        var requests = await context.ExpenseRequests
+            .AsNoTracking()
+            .Include(e => e.User)
+            .OrderByDescending(e => e.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return Ok(requests);
+    }
+
+    /// <summary>
+    /// ログイン中ユーザー自身の経費申請一覧を取得します。
+    /// </summary>
+    [HttpGet("me")]
+    [RequirePermission(PermissionType.ExpenseManageOwn)]
+    public async Task<ActionResult<List<ExpenseRequest>>> GetMyExpenseRequests(CancellationToken cancellationToken = default)
+    {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (!Guid.TryParse(userIdString, out var currentUserId) || userId != currentUserId)
+        if (!Guid.TryParse(userIdString, out var currentUserId))
         {
-            return Forbid("他人の経費申請一覧にはアクセスできません。");
+            return Unauthorized("ユーザー情報が取得できません。");
         }
 
         var requests = await context.ExpenseRequests
             .AsNoTracking()
-            .Where(e => e.UserId == userId)
+            .Where(e => e.UserId == currentUserId)
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -299,7 +339,8 @@ public class ExpenseController(AppDbContext context) : ControllerBase
                  dto.Status == ExpenseStatus.Settled)
         {
             // ② 領収書の確認や精算完了の処理（立替・事前出金 共通）
-            if (expenseRequest.ExpenseDocuments == null || expenseRequest.ExpenseDocuments.Count == 0)
+            if (expenseRequest.ReceiptType != ReceiptType.Paper && 
+                (expenseRequest.ExpenseDocuments == null || expenseRequest.ExpenseDocuments.Count == 0))
             {
                 return BadRequest("証憑（領収書等）がアップロードされていないため、このステータスへは進めません。");
             }

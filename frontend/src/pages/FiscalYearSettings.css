@@ -1,0 +1,152 @@
+.fiscal-year-settings-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.fiscal-year-content {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.settings-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #edf2f7;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.icon-wrapper {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.card-body {
+  padding: 24px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-weight: 500;
+  color: #4a5568;
+  font-size: 0.9rem;
+}
+
+.form-input {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e0;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #3182ce;
+  box-shadow: 0 0 0 3px rgba(49,130,206,0.1);
+}
+
+.help-text {
+  font-size: 0.8rem;
+  color: #718096;
+  margin: 0;
+}
+
+.year-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.year-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8fafc;
+}
+
+.year-card.closed {
+  background: #edf2f7;
+  opacity: 0.8;
+}
+
+.year-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.1rem;
+  color: #2d3748;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.year-meta {
+  font-size: 0.9rem;
+  color: #4a5568;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.badge-status {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.badge-status.active {
+  background: #c6f6d5;
+  color: #22543d;
+}
+
+.badge-status.closed {
+  background: #e2e8f0;
+  color: #4a5568;
+}
+
+.year-actions {
+  display: flex;
+  gap: 8px;
+}

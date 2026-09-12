@@ -379,7 +379,8 @@
 }
 
 .btn-upload-receipt:disabled {
-  opacity: 0.5;
+  background-color: #cbd5e1;
+  color: #64748b;
   cursor: not-allowed;
 }
 

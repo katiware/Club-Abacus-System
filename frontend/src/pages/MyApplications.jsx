@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, UploadCloud, CheckCircle, Clock, Plus, Download, Eye, Paperclip, AlertCircle, Search } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
+import api from '../services/api';
 import './MyApplications.css';
 
 function MyApplications() {
@@ -11,65 +12,37 @@ function MyApplications() {
   
   // State for upload modal
   const [uploadingAppId, setUploadingAppId] = useState(null);
+  const [uploadingAppType, setUploadingAppType] = useState(null);
   const [file, setFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchMyApplications = async () => {
-      setIsLoading(true);
-      await new Promise(resolve => setTimeout(resolve, 600));
-      
-      setApplications([
-        {
-          id: 'EXP-1004',
-          title: '技術書購入',
-          amount: 3200,
-          type: '立替払い',
-          method: 'Web購入',
-          status: 'PENDING_APPROVAL',
-          date: '2026-08-11'
-        },
-        {
-          id: 'EXP-0995',
-          title: 'AWSサーバー代 (7月分)',
-          amount: 12500,
-          type: '立替払い',
-          method: 'Web購入',
-          status: 'APPROVED', // Needs receipt upload
-          date: '2026-08-01'
-        },
-        {
-          id: 'EXP-0988',
-          title: '大会エントリー費用',
-          amount: 30000,
-          type: '事前出金',
-          method: 'Web購入',
-          status: 'WAITING_CONFIRMATION',
-          date: '2026-07-20'
-        },
-        {
-          id: 'EXP-0950',
-          title: '新入生歓迎会 備品',
-          amount: 8300,
-          type: '立替払い',
-          method: '実店舗購入',
-          status: 'COMPLETED',
-          date: '2026-04-15'
-        }
-      ]);
-      setIsLoading(false);
-    };
-
     fetchMyApplications();
   }, []);
 
-  const openUploadModal = (id) => {
+  const fetchMyApplications = async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.get('/Expense/me');
+      setApplications(response.data);
+    } catch (err) {
+      console.error('Failed to fetch applications', err);
+      setError('申請履歴の取得に失敗しました。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const openUploadModal = (id, type) => {
     setUploadingAppId(id);
+    setUploadingAppType(type);
     setFile(null);
   };
 
   const closeUploadModal = () => {
     setUploadingAppId(null);
+    setUploadingAppType(null);
     setFile(null);
   };
 
@@ -84,49 +57,66 @@ function MyApplications() {
     if (!file) return;
 
     setIsSubmitting(true);
-    // Simulate upload delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    // Optimistic update
-    setApplications(prev => 
-      prev.map(app => 
-        app.id === uploadingAppId 
-          ? { ...app, status: 'WAITING_CONFIRMATION' } 
-          : app
-      )
-    );
-    
-    setIsSubmitting(false);
-    closeUploadModal();
-    alert('証憑ファイルを提出しました。管理者の最終確認をお待ちください。');
+    try {
+      const fileFormData = new FormData();
+      fileFormData.append('file', file);
+      const docType = uploadingAppType === 'Advance' ? 'Quotation' : 'Receipt';
+      fileFormData.append('documentType', docType);
+
+      await api.post(`/expenses/${uploadingAppId}/documents`, fileFormData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      // 更新するために再フェッチ
+      await fetchMyApplications();
+      closeUploadModal();
+      alert('証憑ファイルを提出しました。');
+    } catch (err) {
+      console.error(err);
+      alert('アップロードに失敗しました。');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getStatusBadge = (status) => {
     switch (status) {
-      case 'PENDING_APPROVAL':
+      case 'Draft':
+        return <span className="status-badge">下書き</span>;
+      case 'PendingApproval':
         return <span className="status-badge pending"><Clock size={14} /> 承認待ち</span>;
-      case 'APPROVED':
+      case 'Approved':
+      case 'Advance_MoneyHandedOver':
         return <span className="status-badge approved"><CheckCircle size={14} /> 承認済（証憑提出待ち）</span>;
-      case 'WAITING_CONFIRMATION':
+      case 'WaitingConfirmation':
         return <span className="status-badge waiting"><Clock size={14} /> 最終確認待ち</span>;
-      case 'COMPLETED':
+      case 'UniversitySubmitted':
+        return <span className="status-badge"><Clock size={14} /> 大学へ提出済</span>;
+      case 'Settled':
         return <span className="status-badge completed"><CheckCircle size={14} /> 完了</span>;
+      case 'Rejected':
+        return <span className="status-badge danger-text"><AlertCircle size={14} /> 却下</span>;
       default:
         return <span className="status-badge">{status}</span>;
     }
   };
 
   const needsUpload = (app) => {
-    // 承認済であり、かつ証憑アップロードが必要な状態
-    // (立替払いのWeb購入、または事前出金の事後報告など)
-    return app.status === 'APPROVED' && app.method === 'Web購入';
+    // ステータスが Approved 等で、まだ証憑が揃っていない場合。実店舗購入（紙の領収書）の場合は提出画面を出さない
+    return (app.status === 'Approved' || app.status === 'Advance_MoneyHandedOver') && app.receiptType !== 'Paper';
   };
 
+  const getTypeStr = (type) => type === 'Reimbursement' ? '立替払い' : '事前出金';
+  const getReceiptTypeStr = (receiptType) => receiptType === 'Paper' ? '実店舗購入' : 'Web購入';
+  const getTitle = (app) => app.expenseItems && app.expenseItems.length > 0 ? app.expenseItems[0].itemName : '品目なし';
+
   return (
-    <div className="my-apps-container">
+    <div className="my-apps-container fade-in">
       <PageHeader title="申請履歴・証憑提出" backTo="/top" />
 
       <main className="my-apps-content">
+        {error && <div className="p-4 text-red-500 text-center">{error}</div>}
+        
         {isLoading ? (
           <div className="loading-state">読み込み中...</div>
         ) : applications.length === 0 ? (
@@ -136,14 +126,14 @@ function MyApplications() {
             {applications.map(app => (
               <div key={app.id} className="app-card">
                 <div className="app-card-header">
-                  <span className="app-id">{app.id}</span>
-                  <span className="app-date">{app.date}</span>
+                  <span className="app-id">ID: {app.id.substring(0, 8)}</span>
+                  <span className="app-date">{new Date(app.createdAt).toLocaleDateString()}</span>
                 </div>
-                <h3 className="app-title">{app.title}</h3>
+                <h3 className="app-title">{getTitle(app)}</h3>
                 <div className="app-details">
-                  <span className="app-amount">¥{app.amount.toLocaleString()}</span>
-                  <span className={`app-type ${app.type === '事前出金' ? 'type-advance' : 'type-reimburse'}`}>
-                    {app.type} ({app.method})
+                  <span className="app-amount">¥{app.totalAmount.toLocaleString()}</span>
+                  <span className={`app-type ${app.type === 'Advance' ? 'type-advance' : 'type-reimburse'}`}>
+                    {getTypeStr(app.type)} ({getReceiptTypeStr(app.receiptType)})
                   </span>
                 </div>
                 <div className="app-footer">
@@ -151,13 +141,13 @@ function MyApplications() {
                   {needsUpload(app) && (
                     <button 
                       className="upload-btn"
-                      onClick={() => openUploadModal(app.id)}
+                      onClick={() => openUploadModal(app.id, app.type)}
                     >
                       <UploadCloud size={16} />
-                      領収書を提出
+                      証憑を提出
                     </button>
                   )}
-                  {app.status === 'APPROVED' && app.method === '実店舗購入' && (
+                  {(app.status === 'Approved' || app.status === 'Advance_MoneyHandedOver') && app.receiptType === 'Paper' && (
                     <span className="store-note">※紙の領収書を会計担当に直接お渡しください。</span>
                   )}
                 </div>
@@ -171,8 +161,8 @@ function MyApplications() {
       {uploadingAppId && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>領収書の提出 ({uploadingAppId})</h2>
-            <p>対象の領収書または請求書のファイル（画像、PDF）をアップロードしてください。</p>
+            <h2>証憑の提出</h2>
+            <p>対象のファイル（画像、PDF）をアップロードしてください。</p>
             
             <form onSubmit={handleUploadSubmit}>
               <div className="file-drop-area">
@@ -197,7 +187,7 @@ function MyApplications() {
                   キャンセル
                 </button>
                 <button type="submit" className="submit-btn" disabled={!file || isSubmitting}>
-                  {isSubmitting ? '送信中...' : '提出する'}
+                  {isSubmitting ? '送信中...' : (!file ? 'ファイルを選択してください' : '提出する')}
                 </button>
               </div>
             </form>

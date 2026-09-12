@@ -115,7 +115,7 @@ function ExpenseForm() {
       // 3. 申請を提出（PendingApprovalへ進める）
       await api.post(`/Expense/${requestId}/submit`);
 
-      navigate('/dashboard');
+      navigate('/top');
     } catch (err) {
       console.error(err);
       const errorMsg = err.response?.data?.message || err.response?.data || '申請の送信に失敗しました。';
@@ -218,39 +218,6 @@ function ExpenseForm() {
             </select>
           </div>
 
-          <div className="form-group checkbox-group">
-            <label className="checkbox-label">
-              <input type="checkbox" name="isRecurring" checked={formData.isRecurring} onChange={handleInputChange} />
-              定期支払いとして登録する
-            </label>
-          </div>
-
-          {formData.isRecurring && (
-            <div className="form-group recurring-options">
-              <label>対象月</label>
-              <input type="month" name="targetMonth" value={formData.targetMonth} onChange={handleInputChange} className="custom-select" />
-              
-              <label style={{marginTop: '15px'}}>支払日指定</label>
-              <select name="recurringDay" value={formData.recurringDay} onChange={handleInputChange} className="custom-select">
-                <option value="END_OF_MONTH">月末</option>
-                {[...Array(31)].map((_, i) => (
-                  <option key={i+1} value={i+1}>{i+1}日</option>
-                ))}
-              </select>
-
-              <label style={{marginTop: '15px'}}>支払い頻度</label>
-              <div className="radio-group">
-                <label className={`radio-label ${formData.recurringFrequency === 'MONTHLY' ? 'selected' : ''}`}>
-                  <input type="radio" name="recurringFrequency" value="MONTHLY" checked={formData.recurringFrequency === 'MONTHLY'} onChange={handleInputChange} />
-                  毎月
-                </label>
-                <label className={`radio-label ${formData.recurringFrequency === 'YEARLY' ? 'selected' : ''}`}>
-                  <input type="radio" name="recurringFrequency" value="YEARLY" checked={formData.recurringFrequency === 'YEARLY'} onChange={handleInputChange} />
-                  毎年
-                </label>
-              </div>
-            </div>
-          )}
 
           {requiresFileUpload && (
             <div className="file-upload-section required">

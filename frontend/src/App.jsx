@@ -12,6 +12,7 @@ import UserManagement from './pages/UserManagement';
 import ApplicationDetail from './pages/ApplicationDetail';
 import RecurringPayments from './pages/RecurringPayments';
 import ProfileSettings from './pages/ProfileSettings';
+import FiscalYearSettings from './pages/FiscalYearSettings';
 import './App.css';
 
 // A simple PrivateRoute component for protecting routes
@@ -101,6 +102,14 @@ function App() {
           element={
             <AdminRoute>
               <UserManagement />
+            </AdminRoute>
+          } 
+        />
+        <Route 
+          path="/fiscal-years" 
+          element={
+            <AdminRoute>
+              <FiscalYearSettings />
             </AdminRoute>
           } 
         />
