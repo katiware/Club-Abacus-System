@@ -46,9 +46,62 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
     }
 
     /// <summary>
+    /// ログイン中の自身の情報を取得します。
+    /// </summary>
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<ActionResult<UserResponseDto>> GetMyProfile()
+    {
+        var userIdString = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (userIdString == null || !Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var user = await context.Users
+            .AsNoTracking()
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null) return NotFound("ユーザーが見つかりません。");
+
+        return Ok(new UserResponseDto
+        {
+            Id = user.Id,
+            Email = user.Email ?? "",
+            Name = user.Name,
+            RoleId = user.RoleId,
+            RoleName = user.Role?.Name,
+            DiscordId = user.DiscordId,
+            IsActive = user.IsActive,
+            CreatedAt = user.CreatedAt
+        });
+    }
+
+    /// <summary>
+    /// ログイン中の自身の情報を更新します。
+    /// </summary>
+    [HttpPut("me")]
+    [Authorize]
+    public async Task<IActionResult> UpdateMyProfile([FromBody] UserUpdateDto dto)
+    {
+        var userIdString = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (userIdString == null || !Guid.TryParse(userIdString, out var userId)) return Unauthorized();
+
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        if (user == null) return NotFound("ユーザーが見つかりません。");
+
+        if (dto.Name != null) user.Name = dto.Name;
+        
+        user.UpdatedAt = DateTime.UtcNow;
+        var result = await userManager.UpdateAsync(user);
+
+        if (!result.Succeeded) return BadRequest(result.Errors);
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// 特定のユーザーをIDで取得します。
     /// </summary>
-    [HttpGet("{id}")]
+    [HttpGet("{id:guid}")]
     [RequirePermission(PermissionType.ManageUsers)]
     public async Task<ActionResult<UserResponseDto>> GetUserById(Guid id)
     {
@@ -130,7 +183,7 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
     /// <summary>
     /// ユーザー情報を更新します。
     /// </summary>
-    [HttpPut("{id}")]
+    [HttpPut("{id:guid}")]
     [RequirePermission(PermissionType.ManageUsers)]
     public async Task<IActionResult> UpdateUser(Guid id, [FromBody] UserUpdateDto dto)
     {

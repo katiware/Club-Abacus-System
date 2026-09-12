@@ -10,15 +10,6 @@ function AdminSettings() {
   const [notifyOnNew, setNotifyOnNew] = useState(true);
   const [notifyOnComplete, setNotifyOnComplete] = useState(true);
 
-  const handleYearReset = () => {
-    const input = window.prompt("【危険な操作】\n本当に今年度のデータをリセットして新年度を開始しますか？\nこの操作は取り消せません。\n\n実行する場合は「リセット」と入力してください。");
-    if (input === "リセット") {
-      alert("新年度の準備が完了しました。");
-    } else if (input !== null) {
-      alert("入力内容が一致しませんでした。操作をキャンセルします。");
-    }
-  };
-
   const handleSaveSettings = () => {
     alert("設定を保存しました。");
   };
@@ -71,27 +62,6 @@ function AdminSettings() {
           </div>
         </section>
 
-        {/* Danger Zone Card */}
-        <section className="settings-card danger-zone">
-          <div className="card-header">
-            <div className="icon-wrapper bg-red-100">
-              <AlertTriangle size={20} className="text-red-600" />
-            </div>
-            <h2 className="text-red-600">危険な操作 (Danger Zone)</h2>
-          </div>
-          <div className="card-body border-t border-red-100">
-            <div className="danger-action">
-              <div className="danger-info">
-                <h3>年度リセット処理</h3>
-                <p>現在の全ての申請データをアーカイブ状態にし、残高を0にして新しい年度（4月始まり）を開始します。</p>
-              </div>
-              <button className="danger-btn" onClick={handleYearReset}>
-                <RefreshCw size={18} />
-                年度をリセットする
-              </button>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   );
