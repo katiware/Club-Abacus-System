@@ -4,9 +4,13 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.AddServiceDefaults();
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -18,6 +22,18 @@ builder.Services.AddControllers()
 builder.Services.AddScoped<Club_Abacus_System.Services.IJwtTokenService, Club_Abacus_System.Services.JwtTokenService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IFileStorageService, Club_Abacus_System.Services.LocalFileStorageService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseDocumentService, Club_Abacus_System.Services.ExpenseDocumentService>();
+
+builder.Services.AddHttpClient("GoogleCerts", c => c.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(sp => 
+{
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+    var httpClient = httpClientFactory.CreateClient("GoogleCerts");
+    return new ConfigurationManager<OpenIdConnectConfiguration>(
+        "https://accounts.google.com/.well-known/openid-configuration",
+        new OpenIdConnectConfigurationRetriever(),
+        new HttpDocumentRetriever(httpClient) { RequireHttps = true }
+    );
+});
 
 // --- Identity と JWT認証 の設定 ---
 builder.Services.AddIdentity<User, Role>()
@@ -74,20 +90,81 @@ builder.Services.AddCors(options =>
 });
 
 
-// PostgreSQL 接続設定（appsettings.json のデータベース接続文字列を使用）
+// PostgreSQL 接続設定（Aspireから注入される "postgresdb" を使用、なければフォールバック）
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(
-        builder.Configuration.GetConnectionString(
-            "DefaultConnection")));
+        builder.Configuration.GetConnectionString("postgresdb") ?? 
+        builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
 
-//swagger UI(実装時には実行されないようにする)
-app.UseSwagger();
-app.UseSwaggerUI(c =>
+// === データベースの自動マイグレーションと初期データ（シード）投入 ===
+using (var scope = app.Services.CreateScope())
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Club Abacus System API v1");
-});
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<AppDbContext>();
+        context.Database.Migrate();
+
+        var roleManager = services.GetRequiredService<RoleManager<Role>>();
+        var userManager = services.GetRequiredService<UserManager<User>>();
+        var config = services.GetRequiredService<IConfiguration>();
+
+        // 1. Roleの初期化
+        string[] roleNames = { "ADMIN", "USER" };
+        foreach (var roleName in roleNames)
+        {
+            if (!roleManager.RoleExistsAsync(roleName).Result)
+            {
+                roleManager.CreateAsync(new Role { Name = roleName, Description = roleName == "ADMIN" ? "管理者" : "一般ユーザー" }).Wait();
+            }
+        }
+
+        // 2. 初期管理者の登録
+        var adminEmail = config["AdminSettings:InitialAdminEmail"];
+        if (!string.IsNullOrEmpty(adminEmail))
+        {
+            var existingAdmin = userManager.FindByEmailAsync(adminEmail).Result;
+            if (existingAdmin == null)
+            {
+                var adminRole = roleManager.FindByNameAsync("ADMIN").Result;
+                var adminUser = new User
+                {
+                    UserName = adminEmail,
+                    Email = adminEmail,
+                    Name = "初期管理者",
+                    RoleId = adminRole!.Id,
+                    IsActive = true
+                };
+                
+                var result = userManager.CreateAsync(adminUser).Result;
+                if (result.Succeeded)
+                {
+                    // Add to Role just in case (though we use RoleId in User model directly as well)
+                    userManager.AddToRoleAsync(adminUser, "ADMIN").Wait();
+                }
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "データベースの初期化中にエラーが発生しました。");
+    }
+}
+
+app.MapDefaultEndpoints();
+
+if (app.Environment.IsDevelopment())
+{
+    //swagger UI(開発時のみ有効)
+    app.UseSwagger();
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Club Abacus System API v1");
+    });
+}
 
 
 // Configure the HTTP request pipeline.

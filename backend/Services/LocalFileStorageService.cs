@@ -39,6 +39,12 @@ public class LocalFileStorageService : IFileStorageService
         }
 
         var extension = Path.GetExtension(originalFileName).ToLowerInvariant();
+        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp", ".pdf" };
+        if (!allowedExtensions.Contains(extension))
+        {
+            throw new InvalidOperationException("許可されていないファイル形式です。画像またはPDFのみアップロード可能です。");
+        }
+        
         var uniqueFileName = $"{Guid.NewGuid():N}{extension}";
         var fullPath = Path.Combine(targetDir, uniqueFileName);
 

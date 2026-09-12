@@ -6,6 +6,11 @@ const AuthService = {
     return response.data; // { token, user }
   },
 
+  registerWithGoogle: async (credential) => {
+    const response = await api.post('/auth/register', { credential });
+    return response.data; // { token, user }
+  },
+
   logout: () => {
     localStorage.removeItem('authToken');
     localStorage.removeItem('userRole');

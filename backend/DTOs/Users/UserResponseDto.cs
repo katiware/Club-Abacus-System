@@ -1,4 +1,4 @@
-namespace Club_Abacus_System.DTOs;
+namespace Club_Abacus_System.DTOs.Users;
 
 public class UserResponseDto
 {
