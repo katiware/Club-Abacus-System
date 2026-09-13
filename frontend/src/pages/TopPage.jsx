@@ -101,10 +101,6 @@ function TopPage() {
                 <FileText size={24} />
                 <span>自分の申請履歴</span>
               </button>
-              <button onClick={() => navigate('/calculator')} className="menu-btn">
-                <Calculator size={24} />
-                <span>金種計算</span>
-              </button>
               <button onClick={() => navigate('/profile')} className="menu-btn">
                 <User size={24} />
                 <span>プロフィール設定</span>
@@ -121,6 +117,10 @@ function TopPage() {
                 <button onClick={() => navigate('/admin')} className="menu-btn admin-btn">
                   <AlertTriangle size={24} />
                   <span>要確認の申請</span>
+                </button>
+                <button onClick={() => navigate('/calculator')} className="menu-btn admin-btn">
+                  <Calculator size={24} />
+                  <span>金種計算</span>
                 </button>
                 <button onClick={() => navigate('/all-applications')} className="menu-btn admin-btn">
                   <BookOpen size={24} />
