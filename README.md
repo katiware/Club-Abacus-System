@@ -30,9 +30,9 @@ npm install
 
 **① フロントエンド設定 (`frontend/.env`)**
 `frontend` フォルダに `.env` ファイルを作成し、以下を記述します。
+（※APIのURLは .NET Aspire が自動構成するため指定不要です）
 ```env
 VITE_GOOGLE_CLIENT_ID=あなたのGoogleクライアントID.apps.googleusercontent.com
-VITE_API_BASE_URL=http://localhost:5001/api
 ```
 
 **② バックエンド設定 (`backend/appsettings.Development.json`)**
@@ -52,21 +52,27 @@ VITE_API_BASE_URL=http://localhost:5001/api
 ```
 
 ### 3. アプリケーションの起動 (.NET Aspire)
-ルートディレクトリ（または `AppHost` ディレクトリ）に戻り、Aspireプロジェクトを実行します。
+ルートディレクトリ（または `AppHost` ディレクトリ）に移動し、Aspireプロジェクトを実行します。
 ```bash
 cd ../AppHost
 dotnet run
 ```
-※ Visual Studio 2022 や Rider などのIDEをお使いの場合は、`Club-Abacus-System.slnx` (または `AppHost` プロジェクト) をスタートアッププロジェクトに設定して **F5 (実行)** を押すだけでOKです。
+※ Visual Studio 2022 や Rider などのIDEをお使いの場合は、`ClubAbacusSystem.AppHost` プロジェクトをスタートアッププロジェクトに設定して **F5 (デバッグの開始)** を押すだけでOKです。
 
-### 4. 起動の確認
+### 4. 起動と動作の確認作業
 `dotnet run` を実行すると、ターミナルに **Aspire Dashboard** のURL（例: `http://localhost:15000` など）が表示されます。
-ダッシュボードを開くと、以下のリソースが立ち上がっていることが確認できます。
-*   `postgres` / `postgresdb`: データベース (自動でマイグレーションも実行されます)
-*   `backend`: ASP.NET Core API (ポート5001番)
-*   `frontend`: Vite (ポート5173番)
+以下の手順でシステムが正常に動作しているか確認してください。
 
-フロントエンド (`http://localhost:5173`) にアクセスし、設定したGoogleアカウントでログインできれば立ち上げ完了です！
+1. **ダッシュボードの確認**:
+   Aspire Dashboardにアクセスし、以下のリソースがすべて「Running」になっていることを確認します。
+   * `postgres` / `postgresdb`: データベース (自動でマイグレーションも実行されます)
+   * `backend`: ASP.NET Core API
+   * `frontend`: Vite (フロントエンド)
+2. **フロントエンドへのアクセス**:
+   ダッシュボード上の `frontend` のEndpointsリンク（例: `http://localhost:5173`）をクリックしてWebブラウザで開きます。
+3. **初期管理者でのログイン確認**:
+   * 右上のログインボタンから、`appsettings.Development.json` の `InitialAdminEmail` に設定したGoogleアカウントでログインします。
+   * ログイン後、トップページ左上に「管理者」というバッジが表示され、画面下部に「管理者専用機能」メニュー（部員管理、要確認の申請など）が表示されていれば成功です！
 
 ---
 
