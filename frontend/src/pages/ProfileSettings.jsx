@@ -54,9 +54,11 @@ function ProfileSettings() {
   };
 
   if (isLoading) return <div className="p-8 text-center">読み込み中...</div>;
+
+  return (
     <div className="profile-settings-container fade-in">
       <PageHeader title="プロフィール設定" backTo="/top" />
-
+      <main>
         {error && <div className="p-4 text-red-500">{error}</div>}
         <div className="profile-card">
           <div className="profile-avatar-section">
