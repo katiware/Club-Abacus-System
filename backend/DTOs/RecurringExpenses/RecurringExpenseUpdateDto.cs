@@ -15,6 +15,8 @@ public class RecurringExpenseUpdateDto
 
     public int? Amount { get; set; }
 
+    public bool? IsAmountVariable { get; set; }
+
     [MaxLength(255)]
     public string? Payee { get; set; }
 

@@ -24,6 +24,8 @@ public class ExpenseRequest
 
     public int TotalAmount { get; set; } // 申請の合計金額（明細の合計キャッシュ）
 
+    public bool IsAmountVariable { get; set; } = false; // 為替などによる金額変動の有無（定期払いから引き継ぐ）
+
     public Guid? ApprovedById { get; set; } // 承認者のユーザーID
 
     public DateTime? ApprovedAt { get; set; } // 承認日時

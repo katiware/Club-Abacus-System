@@ -37,6 +37,14 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         // TODO: 本格的な予算残高の計算ロジック（とりあえず固定値）
         var budgetBalance = 125000m; 
 
+        // 未生成の有効な定期払いテンプレートの合計金額（予定額）を控除する
+        // 年次・月次の区別は単純化のため、一旦現在の Amount をそのまま控除
+        var futureRecurringTotal = await context.RecurringExpenseTemplates
+            .Where(t => t.TemplateStatus == TemplateStatus.Active && t.DeletedAt == null)
+            .SumAsync(t => t.Amount, cancellationToken);
+        
+        budgetBalance -= futureRecurringTotal;
+
         // TODO: 期限切れの計算（事前出金で未精算かつ期日超過のものなど。とりあえず固定値）
         var overdueCount = 0;
 
@@ -360,6 +368,65 @@ public class ExpenseController(AppDbContext context) : ControllerBase
                 TargetId = expenseRequest.Id,
                 UserId = currentUserId,
                 Action = $"STATUS_CHANGE_{dto.Status.ToString().ToUpper()}"
+            });
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+        return NoContent();
+    }
+
+    /// <summary>
+    /// 定期払いなどで為替変動がある申請（IsAmountVariable=true）の実費金額を確定・修正します。
+    /// </summary>
+    [HttpPut("{id}/amount")]
+    [RequirePermission(PermissionType.ExpenseManageOwn)]
+    public async Task<IActionResult> UpdateExpenseAmount(Guid id, [FromBody] int actualAmount, CancellationToken cancellationToken = default)
+    {
+        var expenseRequest = await context.ExpenseRequests
+            .Include(e => e.ExpenseItems)
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+
+        if (expenseRequest == null) return NotFound("指定された申請が見つかりません。");
+
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(userIdString, out var currentUserId))
+        {
+            if (expenseRequest.UserId != currentUserId && !User.HasClaim("Permission", PermissionType.ExpenseApprove.ToString()))
+            {
+                return Forbid("他人の申請の金額を変更することはできません。");
+            }
+        }
+
+        if (!expenseRequest.IsAmountVariable)
+        {
+            return BadRequest("この申請は金額変動が許可されていません（IsAmountVariable=false）。");
+        }
+
+        // 精算済みなど完了済みのものは変更不可とする
+        if (expenseRequest.Status == ExpenseStatus.Settled || expenseRequest.Status == ExpenseStatus.UniversitySubmitted)
+        {
+            return BadRequest("すでに精算や大学提出が完了しているため、金額を変更できません。");
+        }
+
+        expenseRequest.TotalAmount = actualAmount;
+        
+        // 明細が1件だけの場合は、その明細の金額も合わせる
+        if (expenseRequest.ExpenseItems.Count == 1)
+        {
+            expenseRequest.ExpenseItems.First().UnitPrice = actualAmount;
+        }
+
+        expenseRequest.UpdatedAt = DateTime.UtcNow;
+
+        if (currentUserId != Guid.Empty)
+        {
+            context.AuditLogs.Add(new AuditLog
+            {
+                TargetType = "ExpenseRequests",
+                TargetId = expenseRequest.Id,
+                UserId = currentUserId,
+                Action = "UPDATE_AMOUNT",
+                NewValue = $"実費金額が {actualAmount} に修正されました。"
             });
         }
 
