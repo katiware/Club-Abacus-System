@@ -39,6 +39,9 @@ public class RecurringExpenseTemplate
     public int Amount { get; set; } // 金額
 
     [Required]
+    public bool IsAmountVariable { get; set; } = false; // 為替などによる金額変動の有無
+
+    [Required]
     [MaxLength(255)]
     public string Payee { get; set; } = string.Empty; // 支払先
 
