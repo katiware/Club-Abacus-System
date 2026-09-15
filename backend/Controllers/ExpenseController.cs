@@ -34,14 +34,59 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             .Where(e => e.Status == ExpenseStatus.PendingApproval || e.Status == ExpenseStatus.WaitingConfirmation)
             .CountAsync(cancellationToken);
 
-        // TODO: 本格的な予算残高の計算ロジック（とりあえず固定値）
-        var budgetBalance = 125000m; 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var currentFiscalYear = await context.FiscalYears
+            .FirstOrDefaultAsync(f => f.StartDate <= today && f.EndDate >= today, cancellationToken);
+
+        // TODO: 本格的な予算残高の計算ロジック
+        // 本来は currentFiscalYear.TotalBudget から、今年度のすべての確定済み経費を引く必要がありますが、
+        // 現状は固定値をベースとしています。
+        var budgetBalance = currentFiscalYear != null ? (decimal)currentFiscalYear.TotalBudget : 125000m;
+
+        // 今年度の確定済み経費を差し引く（簡易的な計算）
+        if (currentFiscalYear != null)
+        {
+            var settledTotal = await context.ExpenseRequests
+                .Where(e => e.Status == ExpenseStatus.Settled || e.Status == ExpenseStatus.UniversitySubmitted)
+                // 簡易的に CreatedAt で今年度分を判定
+                .Where(e => e.CreatedAt >= currentFiscalYear.StartDate.ToDateTime(TimeOnly.MinValue) && 
+                            e.CreatedAt <= currentFiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue))
+                .SumAsync(e => e.TotalAmount, cancellationToken);
+            budgetBalance -= settledTotal;
+        }
 
         // 未生成の有効な定期払いテンプレートの合計金額（予定額）を控除する
-        // 年次・月次の区別は単純化のため、一旦現在の Amount をそのまま控除
-        var futureRecurringTotal = await context.RecurringExpenseTemplates
+        var activeTemplates = await context.RecurringExpenseTemplates
             .Where(t => t.TemplateStatus == TemplateStatus.Active && t.DeletedAt == null)
-            .SumAsync(t => t.Amount, cancellationToken);
+            .ToListAsync(cancellationToken);
+
+        decimal futureRecurringTotal = 0;
+        var endOfCalculation = currentFiscalYear != null ? currentFiscalYear.EndDate : today.AddYears(1);
+
+        foreach (var template in activeTemplates)
+        {
+            var currentGenDate = template.NextGenerationDate;
+            int occurrences = 0;
+
+            while (currentGenDate <= endOfCalculation)
+            {
+                occurrences++;
+                if (template.RecurringFrequency == RecurringFrequency.Monthly)
+                {
+                    currentGenDate = currentGenDate.AddMonths(1);
+                }
+                else if (template.RecurringFrequency == RecurringFrequency.Yearly)
+                {
+                    currentGenDate = currentGenDate.AddYears(1);
+                }
+                else
+                {
+                    break; // 万が一未知の頻度があった場合の無限ループ防止
+                }
+            }
+
+            futureRecurringTotal += template.Amount * occurrences;
+        }
         
         budgetBalance -= futureRecurringTotal;
 
@@ -332,6 +377,13 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             return BadRequest("事前承認が完了していないため、このステータスへは進めません。");
         }
 
+        // 金額変動があるが、まだユーザーが実費確定していない場合は進めない
+        if (expenseRequest.IsAmountVariable && !expenseRequest.IsAmountFinalized && 
+            (dto.Status == ExpenseStatus.WaitingConfirmation || dto.Status == ExpenseStatus.Settled || dto.Status == ExpenseStatus.UniversitySubmitted))
+        {
+            return BadRequest("為替などによる金額変動が設定されている申請ですが、まだ実費金額が確定されていません。ユーザーに金額を修正・確定してもらってください。");
+        }
+
         // --- ステータス別の詳細バリデーション ---
         if (dto.Status == ExpenseStatus.Advance_MoneyHandedOver)
         {
@@ -409,6 +461,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         }
 
         expenseRequest.TotalAmount = actualAmount;
+        expenseRequest.IsAmountFinalized = true;
         
         // 明細が1件だけの場合は、その明細の金額も合わせる
         if (expenseRequest.ExpenseItems.Count == 1)

@@ -26,6 +26,8 @@ public class ExpenseRequest
 
     public bool IsAmountVariable { get; set; } = false; // 為替などによる金額変動の有無（定期払いから引き継ぐ）
 
+    public bool IsAmountFinalized { get; set; } = false; // 金額変動がある場合、ユーザーが実費を確定させたかどうかのフラグ
+
     public Guid? ApprovedById { get; set; } // 承認者のユーザーID
 
     public DateTime? ApprovedAt { get; set; } // 承認日時
