@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle, XCircle, FileImage, Download, Clock, UploadCloud, FileText, ExternalLink, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, XCircle, FileImage, Download, Clock, UploadCloud, FileText, ExternalLink, AlertCircle, Edit2, Send } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
+import { jwtDecode } from 'jwt-decode';
 import api from '../services/api';
 import './ApplicationDetail.css';
 
@@ -19,6 +20,18 @@ function ApplicationDetail() {
   const [uploadMessage, setUploadMessage] = useState(null);
   const [actualAmount, setActualAmount] = useState('');
   const [error, setError] = useState(null);
+
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState({
+    title: '',
+    amount: '',
+    category: '',
+  });
+
+  const token = localStorage.getItem('authToken');
+  const decodedToken = token ? jwtDecode(token) : null;
+  const currentUserId = decodedToken?.sub;
 
   const fetchAppDetail = async () => {
     if (!id || id.startsWith('EXP-')) return;
@@ -143,26 +156,87 @@ function ApplicationDetail() {
   };
 
   const handleAction = async (actionStatus) => {
-    try {
-      let endpoint = `/Expense/${id}/approve`;
-      if (actionStatus === 'Settled' || actionStatus === 'WaitingConfirmation' || actionStatus === 'UniversitySubmitted' || actionStatus === 'Advance_MoneyHandedOver') {
-        endpoint = `/Expense/${id}/confirm`;
-      }
-      
-      let payload = { status: actionStatus };
-      if (actionStatus === 'Rejected') {
-        const comment = prompt("差し戻しの理由（コメント）を入力してください:");
-        if (comment === null) return;
-        payload.rejectionReason = comment;
-      }
+  const handleAction = async (newStatus) => {
+    if (newStatus === 'Rejected') {
+      const confirmReject = window.confirm('本当にこの申請を却下しますか？却下すると申請者は修正できません。');
+      if (!confirmReject) return;
+    }
 
-      await api.put(endpoint, payload);
-      alert(`ステータスを更新しました。`);
-      await fetchAppDetail();
+    try {
+      if (newStatus === 'Rejected') {
+        await api.put(`/Expense/${id}/reject`, { reason: "管理者による却下" });
+      } else {
+        await api.put(`/Expense/${id}/approve`, { newStatus });
+      }
+      alert('ステータスを更新しました');
+      fetchAppDetail();
     } catch (err) {
       console.error(err);
       const errMsg = err.response?.data?.message || err.response?.data || '処理に失敗しました。';
       alert(`エラー: ${errMsg}`);
+    }
+  };
+
+  const handleRemand = async () => {
+    const reason = window.prompt('差し戻し理由を入力してください:\n（部員はこの理由を見て内容を修正します）');
+    if (!reason) return;
+
+    try {
+      await api.post(`/Expense/${id}/remand`, { reason });
+      alert('申請を差し戻しました。');
+      fetchAppDetail();
+    } catch (err) {
+      console.error(err);
+      alert('差し戻し処理に失敗しました。');
+    }
+  };
+
+  const handleResubmit = async () => {
+    const confirmSubmit = window.confirm('この内容で再提出しますか？');
+    if (!confirmSubmit) return;
+
+    try {
+      await api.post(`/Expense/${id}/submit`);
+      alert('再提出しました。');
+      fetchAppDetail();
+    } catch (err) {
+      console.error(err);
+      alert('再提出に失敗しました。');
+    }
+  };
+
+  const openEditModal = () => {
+    setEditData({
+      title: app.expenseItems[0]?.itemName || '',
+      amount: app.totalAmount || '',
+      category: app.expenseItems[0]?.category || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSave = async () => {
+    try {
+      const payload = {
+        type: app.type,
+        receiptType: app.receiptType,
+        expenseItems: [
+          {
+            itemName: editData.title,
+            unitPrice: parseInt(editData.amount, 10),
+            quantity: 1,
+            payee: app.expenseItems[0]?.payee || '未指定',
+            category: editData.category,
+            description: app.expenseItems[0]?.description || null
+          }
+        ]
+      };
+      await api.put(`/Expense/${id}`, payload);
+      alert('内容を保存しました。（※ まだ承認待ちにはなっていません。「再提出」ボタンを押してください）');
+      setShowEditModal(false);
+      fetchAppDetail();
+    } catch (err) {
+      console.error(err);
+      alert('保存に失敗しました。');
     }
   };
 
@@ -174,7 +248,8 @@ function ApplicationDetail() {
       case 'WaitingConfirmation': return <span className="detail-status status-waiting"><Clock size={16}/> 最終確認待</span>;
       case 'UniversitySubmitted': return <span className="detail-status status-completed">大学へ提出済</span>;
       case 'Settled': return <span className="detail-status status-completed"><CheckCircle size={16}/> 精算完了</span>;
-      case 'Rejected': return <span className="detail-status bg-red-100 text-red-800"><AlertCircle size={16}/> 却下・差戻</span>;
+      case 'Rejected': return <span className="detail-status bg-red-100 text-red-800"><AlertCircle size={16}/> 却下</span>;
+      case 'Remanded': return <span className="detail-status status-remanded"><AlertCircle size={16}/> 差し戻し中</span>;
       case 'Draft': return <span className="detail-status">下書き</span>;
       default: return <span className="detail-status">{status}</span>;
     }
@@ -263,24 +338,40 @@ function ApplicationDetail() {
                 <span className="info-label">詳細説明</span>
                 <span className="info-value desc-text">{description || '詳細なし'}</span>
               </div>
+              {app.status === 'Remanded' && app.rejectionReason && (
+                <div className="info-item full-width mt-4 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <span className="info-label text-orange-700 font-bold mb-1"><AlertCircle size={16} className="inline mr-1" />差し戻し理由（修正してください）</span>
+                  <span className="info-value text-orange-900">{app.rejectionReason}</span>
+                </div>
+              )}
+              {app.status === 'PendingApproval' && app.rejectionReason && (
+                <div className="info-item full-width mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <span className="info-label text-blue-700 font-bold mb-1"><AlertCircle size={16} className="inline mr-1" />前回差し戻し時の理由</span>
+                  <span className="info-value text-blue-900">{app.rejectionReason}</span>
+                </div>
+              )}
               {app.status === 'Rejected' && app.rejectionReason && (
                 <div className="info-item full-width mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <span className="info-label text-red-700 font-bold mb-1"><AlertCircle size={16} className="inline mr-1" />差戻し理由</span>
+                  <span className="info-label text-red-700 font-bold mb-1"><AlertCircle size={16} className="inline mr-1" />却下理由</span>
                   <span className="info-value text-red-800">{app.rejectionReason}</span>
                 </div>
               )}
             </div>
 
             <div className="action-buttons-row mt-6">
-              {app.status === 'PendingApproval' && (
+              {(app.status === 'PendingApproval' || app.status === 'WaitingConfirmation') && (
                 <>
-                  <button className="btn-approve" onClick={() => handleAction('Approved')}>
+                  <button className="btn-approve" onClick={() => handleAction(app.status === 'PendingApproval' ? 'Approved' : 'Settled')}>
                     <CheckCircle size={18} />
-                    事前承認する
+                    {app.status === 'PendingApproval' ? '事前承認する' : '証憑を確認して精算完了する'}
+                  </button>
+                  <button className="btn-reject" onClick={handleRemand} style={{ backgroundColor: '#f97316', color: 'white' }}>
+                    <AlertCircle size={18} />
+                    差し戻す
                   </button>
                   <button className="btn-reject" onClick={() => handleAction('Rejected')}>
                     <XCircle size={18} />
-                    却下・差し戻す
+                    却下する
                   </button>
                 </>
               )}
@@ -313,15 +404,16 @@ function ApplicationDetail() {
                 </button>
               )}
 
-              {app.status === 'WaitingConfirmation' && (
+              {/* User Actions */}
+              {app.userId === currentUserId && (app.status === 'Draft' || app.status === 'Remanded') && (
                 <>
-                  <button className="btn-approve" onClick={() => handleAction('Settled')}>
-                    <CheckCircle size={18} />
-                    証憑を確認して精算完了する
+                  <button className="btn-edit" onClick={openEditModal}>
+                    <Edit2 size={18} />
+                    内容を編集する
                   </button>
-                  <button className="btn-reject" onClick={() => handleAction('Rejected')}>
-                    <XCircle size={18} />
-                    不備として差し戻す
+                  <button className="btn-save" onClick={handleResubmit} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Send size={18} />
+                    再提出する (承認待ちへ)
                   </button>
                 </>
               )}
@@ -435,6 +527,48 @@ function ApplicationDetail() {
           </section>
         </div>
       </main>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h3>申請内容の編集</h3>
+            <div className="modal-form-group">
+              <label>用途・品目</label>
+              <input 
+                type="text" 
+                value={editData.title} 
+                onChange={e => setEditData({...editData, title: e.target.value})} 
+              />
+            </div>
+            <div className="modal-form-group">
+              <label>金額 (円)</label>
+              <input 
+                type="number" 
+                value={editData.amount} 
+                onChange={e => setEditData({...editData, amount: e.target.value})} 
+              />
+            </div>
+            <div className="modal-form-group">
+              <label>カテゴリ</label>
+              <select 
+                value={editData.category} 
+                onChange={e => setEditData({...editData, category: e.target.value})}
+              >
+                <option value="交通費">交通費</option>
+                <option value="備品代">備品代</option>
+                <option value="大会参加費">大会参加費</option>
+                <option value="懇親会費">懇親会費</option>
+                <option value="その他">その他</option>
+              </select>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-cancel" onClick={() => setShowEditModal(false)}>キャンセル</button>
+              <button className="btn-save" onClick={handleEditSave}>保存する</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

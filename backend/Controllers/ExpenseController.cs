@@ -267,8 +267,8 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             return Forbid("他人の申請を操作することはできません。");
         }
 
-        // 下書き状態の場合のみ提出可能
-        if (expenseRequest.Status != ExpenseStatus.Draft)
+        // 下書き、または差し戻し状態の場合のみ提出可能
+        if (expenseRequest.Status != ExpenseStatus.Draft && expenseRequest.Status != ExpenseStatus.Remanded)
         {
             return BadRequest("この申請はすでに提出されているか、処理が進んでいます。");
         }
@@ -288,6 +288,111 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         await context.SaveChangesAsync(cancellationToken);
         return Ok();
     }
+
+    /// <summary>
+    /// 経費申請を差し戻します。
+    /// </summary>
+    [HttpPost("{id}/remand")]
+    [RequirePermission(PermissionType.ExpenseApprove)] // 承認権限を持つユーザーが差し戻し可能
+    public async Task<IActionResult> RemandExpenseRequest(Guid id, [FromBody] RemandRequestDto dto, CancellationToken cancellationToken = default)
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var currentUserId))
+        {
+            return Unauthorized("ユーザー情報が取得できません。");
+        }
+
+        var expenseRequest = await context.ExpenseRequests.FindAsync(new object[] { id }, cancellationToken);
+
+        if (expenseRequest == null)
+        {
+            return NotFound("指定された申請が見つかりません。");
+        }
+
+        if (expenseRequest.Status != ExpenseStatus.PendingApproval && expenseRequest.Status != ExpenseStatus.WaitingConfirmation)
+        {
+            return BadRequest("この申請は差し戻しできるステータスではありません。");
+        }
+
+        expenseRequest.Status = ExpenseStatus.Remanded;
+        expenseRequest.RejectionReason = dto.Reason;
+        expenseRequest.UpdatedAt = DateTime.UtcNow;
+
+        context.AuditLogs.Add(new AuditLog
+        {
+            TargetType = "ExpenseRequests",
+            TargetId = expenseRequest.Id,
+            UserId = currentUserId,
+            Action = "STATUS_CHANGE_REMAND"
+        });
+
+        await context.SaveChangesAsync(cancellationToken);
+        return Ok();
+    }
+
+    /// <summary>
+    /// 申請内容（金額や品目など）を編集します。（下書き・差し戻し中のみ可能）
+    /// </summary>
+    [HttpPut("{id}")]
+    [RequirePermission(PermissionType.ExpenseManageOwn)]
+    public async Task<IActionResult> EditExpenseRequest(Guid id, [FromBody] ExpenseUpdateDto dto, CancellationToken cancellationToken = default)
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (!Guid.TryParse(userIdString, out var currentUserId))
+        {
+            return Unauthorized();
+        }
+
+        var expenseRequest = await context.ExpenseRequests
+            .Include(e => e.ExpenseItems)
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
+
+        if (expenseRequest == null) return NotFound();
+
+        if (expenseRequest.UserId != currentUserId)
+        {
+            return Forbid("他人の申請を操作することはできません。");
+        }
+
+        if (expenseRequest.Status != ExpenseStatus.Draft && expenseRequest.Status != ExpenseStatus.Remanded)
+        {
+            return BadRequest("承認プロセスが進行中のため、編集できません。");
+        }
+
+        // 申請ヘッダの更新
+        expenseRequest.Type = dto.Type;
+        expenseRequest.ReceiptType = dto.ReceiptType;
+        expenseRequest.TotalAmount = dto.ExpenseItems.Sum(x => x.UnitPrice * x.Quantity);
+        expenseRequest.UpdatedAt = DateTime.UtcNow;
+
+        // 明細の更新（既存を全削除して新規追加するシンプルアプローチ）
+        context.ExpenseItems.RemoveRange(expenseRequest.ExpenseItems);
+        var newItems = dto.ExpenseItems.Select(item => new ExpenseItem
+        {
+            Id = Guid.NewGuid(),
+            RequestId = id,
+            ItemName = item.ItemName,
+            UnitPrice = item.UnitPrice,
+            Quantity = item.Quantity,
+            Payee = item.Payee,
+            Category = item.Category,
+            Description = item.Description
+        }).ToList();
+        
+        context.ExpenseItems.AddRange(newItems);
+
+        context.AuditLogs.Add(new AuditLog
+        {
+            TargetType = "ExpenseRequests",
+            TargetId = expenseRequest.Id,
+            UserId = currentUserId,
+            Action = "EDIT_CONTENT"
+        });
+
+        await context.SaveChangesAsync(cancellationToken);
+        return Ok();
+    }
+
 
     /// <summary>
     /// 経費申請の事前承認・却下を行います。

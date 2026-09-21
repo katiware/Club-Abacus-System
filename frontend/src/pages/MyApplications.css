@@ -124,6 +124,16 @@
   width: fit-content;
 }
 
+.status-badge.danger-text {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.status-badge.warning-text {
+  background-color: #fff3e0;
+  color: #ef6c00;
+}
+
 .status-badge.pending {
   background-color: #fff3e0;
   color: #e65100;

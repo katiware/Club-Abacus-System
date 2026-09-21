@@ -106,6 +106,8 @@ function MyApplications() {
         return <span className="status-badge completed"><CheckCircle size={14} /> 完了</span>;
       case 'Rejected':
         return <span className="status-badge danger-text"><AlertCircle size={14} /> 却下</span>;
+      case 'Remanded':
+        return <span className="status-badge warning-text"><AlertCircle size={14} /> 差し戻し中</span>;
       default:
         return <span className="status-badge">{status}</span>;
     }

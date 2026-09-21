@@ -16,6 +16,7 @@ public enum ExpenseStatus
 {
     // --- 共通 ---
     Draft = 10,               // DRAFT: 下書き（部員が入力中）
+    Remanded = 15,            // REMANDED: 差し戻し中（管理者による修正依頼）
     PendingApproval = 20,     // PENDING_APPROVAL: 承認待ち（部員が申請提出）
     Approved = 30,            // 事前承認済（立替:購入待ち / 事前出金:現金渡し待ち）
     WaitingConfirmation = 40, // 領収書確認待ち（会計によるチェック待ち）
