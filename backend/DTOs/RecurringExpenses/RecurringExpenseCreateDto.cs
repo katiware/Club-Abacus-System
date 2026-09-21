@@ -29,6 +29,9 @@ public class RecurringExpenseCreateDto
     public int Amount { get; set; }
 
     [Required]
+    public bool IsAmountVariable { get; set; }
+
+    [Required]
     [MaxLength(255)]
     public string Payee { get; set; } = string.Empty;
 

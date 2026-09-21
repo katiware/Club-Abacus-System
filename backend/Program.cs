@@ -22,6 +22,7 @@ builder.Services.AddControllers()
 builder.Services.AddScoped<Club_Abacus_System.Services.IJwtTokenService, Club_Abacus_System.Services.JwtTokenService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IFileStorageService, Club_Abacus_System.Services.LocalFileStorageService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseDocumentService, Club_Abacus_System.Services.ExpenseDocumentService>();
+builder.Services.AddHostedService<Club_Abacus_System.Services.RecurringExpenseBatchService>();
 
 builder.Services.AddHttpClient("GoogleCerts", c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(sp => 

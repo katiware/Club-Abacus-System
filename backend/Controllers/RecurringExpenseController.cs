@@ -77,6 +77,7 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
             ReceiptType = dto.ReceiptType,
             ItemName = dto.ItemName,
             Amount = dto.Amount,
+            IsAmountVariable = dto.IsAmountVariable,
             Payee = dto.Payee,
             Category = dto.Category,
             NextGenerationDate = dto.NextGenerationDate,
@@ -110,6 +111,7 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         if (dto.TemplateStatus.HasValue) template.TemplateStatus = dto.TemplateStatus.Value;
         if (dto.ItemName != null) template.ItemName = dto.ItemName;
         if (dto.Amount.HasValue) template.Amount = dto.Amount.Value;
+        if (dto.IsAmountVariable.HasValue) template.IsAmountVariable = dto.IsAmountVariable.Value;
         if (dto.Payee != null) template.Payee = dto.Payee;
         if (dto.Category != null) template.Category = dto.Category;
         if (dto.NextGenerationDate.HasValue) template.NextGenerationDate = dto.NextGenerationDate.Value;
