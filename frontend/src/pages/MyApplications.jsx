@@ -11,9 +11,9 @@ function MyApplications() {
   const [isLoading, setIsLoading] = useState(true);
   
   // State for upload modal
-  const [uploadingAppId, setUploadingAppId] = useState(null);
-  const [uploadingAppType, setUploadingAppType] = useState(null);
+  const [uploadingApp, setUploadingApp] = useState(null);
   const [file, setFile] = useState(null);
+  const [actualAmount, setActualAmount] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
@@ -34,16 +34,16 @@ function MyApplications() {
     }
   };
 
-  const openUploadModal = (id, type) => {
-    setUploadingAppId(id);
-    setUploadingAppType(type);
+  const openUploadModal = (app) => {
+    setUploadingApp(app);
     setFile(null);
+    setActualAmount(app.totalAmount || '');
   };
 
   const closeUploadModal = () => {
-    setUploadingAppId(null);
-    setUploadingAppType(null);
+    setUploadingApp(null);
     setFile(null);
+    setActualAmount('');
   };
 
   const handleFileChange = (e) => {
@@ -54,23 +54,33 @@ function MyApplications() {
 
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
-    if (!file) return;
+    if (!file || !uploadingApp) return;
 
     setIsSubmitting(true);
     try {
+      // 未確定金額がある場合は先に確定させる
+      if (uploadingApp.isAmountVariable && !uploadingApp.isAmountFinalized) {
+        if (!actualAmount) {
+          alert("実際の請求額を入力してください。");
+          setIsSubmitting(false);
+          return;
+        }
+        await api.put(`/Expense/${uploadingApp.id}/amount`, Number(actualAmount), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
       const fileFormData = new FormData();
       fileFormData.append('file', file);
-      const docType = uploadingAppType === 'Advance' ? 'Quotation' : 'Receipt';
+      const docType = uploadingApp.type === 'Advance' ? 'Quotation' : 'Receipt';
       fileFormData.append('documentType', docType);
 
-      await api.post(`/expenses/${uploadingAppId}/documents`, fileFormData, {
+      await api.post(`/expenses/${uploadingApp.id}/documents`, fileFormData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
-      // 更新するために再フェッチ
-      await fetchMyApplications();
-      closeUploadModal();
+
       alert('証憑ファイルを提出しました。');
+      closeUploadModal();
+      fetchMyApplications();
     } catch (err) {
       console.error(err);
       alert('アップロードに失敗しました。');
@@ -131,8 +141,13 @@ function MyApplications() {
                 </div>
                 <h3 className="app-title">{getTitle(app)}</h3>
                 <div className="app-details">
-                  <span className="app-amount">¥{app.totalAmount.toLocaleString()}</span>
-                  <span className={`app-type ${app.type === 'Advance' ? 'type-advance' : 'type-reimburse'}`}>
+                  <span className="app-amount">
+                    {app.isAmountVariable && !app.isAmountFinalized ? `~¥${app.totalAmount.toLocaleString()} (目安)` : `¥${app.totalAmount.toLocaleString()}`}
+                  </span>
+                  {app.isAmountVariable && !app.isAmountFinalized && (
+                    <span className="status-badge warning" style={{backgroundColor: '#ffeeba', color: '#856404', marginLeft: '8px', fontSize: '11px'}}>金額未確定</span>
+                  )}
+                  <span className={`app-type ${app.type === 'Advance' ? 'type-advance' : 'type-reimburse'}`} style={{marginLeft: 'auto'}}>
                     {getTypeStr(app.type)} ({getReceiptTypeStr(app.receiptType)})
                   </span>
                 </div>
@@ -141,7 +156,7 @@ function MyApplications() {
                   {needsUpload(app) && (
                     <button 
                       className="upload-btn"
-                      onClick={() => openUploadModal(app.id, app.type)}
+                      onClick={() => openUploadModal(app)}
                     >
                       <UploadCloud size={16} />
                       証憑を提出
@@ -158,13 +173,30 @@ function MyApplications() {
       </main>
 
       {/* Upload Modal */}
-      {uploadingAppId && (
+      {uploadingApp && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <h2>証憑の提出</h2>
+            <h2>証憑の提出 {uploadingApp.isAmountVariable && !uploadingApp.isAmountFinalized ? 'と金額の確定' : ''}</h2>
             <p>対象のファイル（画像、PDF）をアップロードしてください。</p>
             
             <form onSubmit={handleUploadSubmit}>
+              {uploadingApp.isAmountVariable && !uploadingApp.isAmountFinalized && (
+                <div className="amount-update-section" style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
+                  <h3 style={{fontSize: '14px', marginBottom: '8px', color: '#495057'}}>実際の請求額を入力してください</h3>
+                  <div style={{display: 'flex', alignItems: 'center'}}>
+                    <span style={{marginRight: '8px'}}>¥</span>
+                    <input 
+                      type="number" 
+                      value={actualAmount}
+                      onChange={(e) => setActualAmount(e.target.value)}
+                      className="modal-input"
+                      style={{padding: '8px', borderRadius: '4px', border: '1px solid #ced4da', width: '100%'}}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+              
               <div className="file-drop-area">
                 <UploadCloud size={32} className="upload-icon" />
                 <p>クリックしてファイルを選択するか、ドラッグ＆ドロップしてください</p>

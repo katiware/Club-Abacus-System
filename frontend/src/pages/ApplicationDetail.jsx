@@ -17,6 +17,7 @@ function ApplicationDetail() {
   const [uploadFile, setUploadFile] = useState(null);
   const [uploadDocType, setUploadDocType] = useState('Receipt');
   const [uploadMessage, setUploadMessage] = useState(null);
+  const [actualAmount, setActualAmount] = useState('');
   const [error, setError] = useState(null);
 
   const fetchAppDetail = async () => {
@@ -25,6 +26,7 @@ function ApplicationDetail() {
     try {
       const res = await api.get(`/Expense/${id}`);
       setApp(res.data);
+      setActualAmount(res.data.totalAmount || '');
       
       if (res.data.expenseDocuments) {
         setDocuments(res.data.expenseDocuments);
@@ -109,6 +111,17 @@ function ApplicationDetail() {
     setUploading(true);
     setUploadMessage(null);
     try {
+      if (app.isAmountVariable && !app.isAmountFinalized) {
+        if (!actualAmount) {
+          setUploadMessage({ type: 'error', text: '実際の請求額を入力してください。' });
+          setUploading(false);
+          return;
+        }
+        await api.put(`/Expense/${id}/amount`, Number(actualAmount), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('documentType', uploadDocType);
@@ -208,6 +221,12 @@ function ApplicationDetail() {
 
       <main className="detail-layout">
         <div className="detail-main-col">
+          {app.isAmountVariable && !app.isAmountFinalized && (
+            <div className="warning-banner" style={{backgroundColor: '#fff3cd', color: '#856404', padding: '12px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center'}}>
+              <AlertCircle size={20} style={{marginRight: '8px'}} />
+              <span><strong>金額未確定:</strong> 為替レートなどによる金額変動が設定されている申請です。証憑提出時に実際の請求額を入力して金額を確定させてください。</span>
+            </div>
+          )}
           <section className="detail-card">
             <h2>基本情報</h2>
             <div className="info-grid">
@@ -233,7 +252,12 @@ function ApplicationDetail() {
               </div>
               <div className="info-item full-width amount-highlight">
                 <span className="info-label">申請金額</span>
-                <span className="info-value amount-text">¥{app.totalAmount.toLocaleString()}</span>
+                <span className="info-value amount-text">
+                  {app.isAmountVariable && !app.isAmountFinalized ? `~¥${app.totalAmount.toLocaleString()} (目安)` : `¥${app.totalAmount.toLocaleString()}`}
+                  {app.isAmountVariable && !app.isAmountFinalized && (
+                    <span className="status-badge warning" style={{backgroundColor: '#ffeeba', color: '#856404', marginLeft: '12px', fontSize: '12px', fontWeight: 'normal'}}>金額未確定</span>
+                  )}
+                </span>
               </div>
               <div className="info-item full-width">
                 <span className="info-label">詳細説明</span>
@@ -371,6 +395,22 @@ function ApplicationDetail() {
                       <option value="Invoice">適格請求書 (Amazon)</option>
                     </select>
                   </div>
+
+                  {app.isAmountVariable && !app.isAmountFinalized && (
+                    <div className="amount-update-section" style={{marginBottom: '16px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '4px'}}>
+                      <h4 style={{fontSize: '13px', marginBottom: '8px', color: '#495057'}}>実際の請求額を入力してください</h4>
+                      <div style={{display: 'flex', alignItems: 'center'}}>
+                        <span style={{marginRight: '8px'}}>¥</span>
+                        <input 
+                          type="number" 
+                          value={actualAmount}
+                          onChange={(e) => setActualAmount(e.target.value)}
+                          style={{padding: '8px', borderRadius: '4px', border: '1px solid #ced4da', width: '100%'}}
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="upload-file-picker">
                     <input 

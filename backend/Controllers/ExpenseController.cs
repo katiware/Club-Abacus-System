@@ -93,11 +93,22 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         // TODO: 期限切れの計算（事前出金で未精算かつ期日超過のものなど。とりあえず固定値）
         var overdueCount = 0;
 
+        var userIdString = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        int unfinalizedCount = 0;
+        if (Guid.TryParse(userIdString, out var currentUserId))
+        {
+            unfinalizedCount = await context.ExpenseRequests
+                .Where(e => e.UserId == currentUserId && e.IsAmountVariable && !e.IsAmountFinalized 
+                            && e.Status != ExpenseStatus.Rejected && e.Status != ExpenseStatus.Settled)
+                .CountAsync(cancellationToken);
+        }
+
         return Ok(new ExpenseSummaryDto
         {
             PendingCount = pendingCount,
             OverdueCount = overdueCount,
-            BudgetBalance = budgetBalance
+            BudgetBalance = budgetBalance,
+            UnfinalizedCount = unfinalizedCount
         });
     }
     /// <summary>
