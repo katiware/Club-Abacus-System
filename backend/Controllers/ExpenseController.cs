@@ -210,6 +210,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         var requests = await context.ExpenseRequests
             .AsNoTracking()
             .Include(e => e.User)
+            .Include(e => e.ExpenseItems)
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -231,6 +232,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
 
         var requests = await context.ExpenseRequests
             .AsNoTracking()
+            .Include(e => e.ExpenseItems)
             .Where(e => e.UserId == currentUserId)
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync(cancellationToken);

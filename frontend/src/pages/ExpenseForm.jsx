@@ -26,15 +26,16 @@ function ExpenseForm() {
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isHighAmount = parseInt(formData.amount, 10) >= 50000;
-  const requiresFileUpload = formData.expenseType === 'ADVANCE_PAYMENT' || 
-                             (formData.expenseType === 'PAY_OUT_OF_POCKET' && (formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON'));
+  const parsedAmountForCheck = parseInt(formData.amount, 10);
+  const isHighAmount = !isNaN(parsedAmountForCheck) && parsedAmountForCheck >= 50000;
+  const requiresFileUpload = formData.expenseType === 'ADVANCE_PAYMENT';
+  const showFileUpload = true; // 実店舗購入も含め、すべての購入方法で証憑提出画面を表示する
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({ 
-      ...prev, 
-      [name]: type === 'checkbox' ? checked : value 
+    setFormData((prev) => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
     }));
   };
 
@@ -49,19 +50,60 @@ function ExpenseForm() {
     setError(null);
 
     // Validation
+    if (!formData.title || formData.title.trim() === '') {
+      setError('用途・品目名を入力してください。');
+      return;
+    }
+    if (formData.title.length > 255) {
+      setError('用途・品目名は255文字以内で入力してください。');
+      return;
+    }
+
+    const parsedAmount = parseInt(formData.amount, 10);
+    if (isNaN(parsedAmount) || parsedAmount <= 0 || parsedAmount > 2000000000) {
+      setError('有効な金額（1〜2,000,000,000円）を入力してください。');
+      return;
+    }
+
     if (requiresFileUpload && !file) {
-      setError(formData.expenseType === 'ADVANCE_PAYMENT' ? '事前出金の場合は、見積書等のファイルのアップロードが必須です。' : '立替払いの場合は、領収書等のファイルのアップロードが必須です。');
+      setError('事前出金の場合は、見積書等のファイルのアップロードが必須です。');
       return;
     }
-    
-    if (formData.purchaseMethod === 'AMAZON' && !amazonInvoice) {
-      setError('Amazon購入の場合は、適格請求書（見積書）のアップロードも必須です。');
-      return;
-    }
+
+    // Amazon購入の場合の適格請求書は、一旦任意（後から提出可能）とする
+    // if (formData.purchaseMethod === 'AMAZON' && !amazonInvoice) {
+    //   setError('Amazon購入の場合は、適格請求書（見積書）のアップロードも必須です。');
+    //   return;
+    // }
 
     if (!formData.category) {
       setError('使途カテゴリを選択してください。');
       return;
+    }
+
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+    if (file) {
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`証憑ファイル (${file.name}) のサイズが10MBを超えています。`);
+        return;
+      }
+      if (!allowedTypes.includes(file.type)) {
+        setError(`証憑ファイル (${file.name}) はJPG/PNG/WEBP/PDFのみ対応しています。`);
+        return;
+      }
+    }
+
+    if (formData.purchaseMethod === 'AMAZON' && amazonInvoice) {
+      if (amazonInvoice.size > MAX_FILE_SIZE) {
+        setError(`適格請求書ファイル (${amazonInvoice.name}) のサイズが10MBを超えています。`);
+        return;
+      }
+      if (!allowedTypes.includes(amazonInvoice.type)) {
+        setError(`適格請求書ファイル (${amazonInvoice.name}) はJPG/PNG/WEBP/PDFのみ対応しています。`);
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -75,7 +117,7 @@ function ExpenseForm() {
         expenseItems: [
           {
             itemName: formData.title,
-            unitPrice: parseInt(formData.amount, 10),
+            unitPrice: parsedAmount,
             quantity: 1,
             payee: formData.purchaseMethod === 'AMAZON' ? 'Amazon' : '未指定',
             category: formData.category,
@@ -96,9 +138,7 @@ function ExpenseForm() {
         const docType = formData.expenseType === 'ADVANCE_PAYMENT' ? 'Quotation' : 'Receipt';
         fileFormData.append('documentType', docType);
 
-        await api.post(`/expenses/${requestId}/documents`, fileFormData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await api.post(`/expenses/${requestId}/documents`, fileFormData);
       }
 
       // Amazon購入で適格請求書がある場合のみ追加アップロード
@@ -107,9 +147,7 @@ function ExpenseForm() {
         invoiceFormData.append('file', amazonInvoice);
         invoiceFormData.append('documentType', 'Invoice');
 
-        await api.post(`/expenses/${requestId}/documents`, invoiceFormData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        await api.post(`/expenses/${requestId}/documents`, invoiceFormData);
       }
 
       // 3. 申請を提出（PendingApprovalへ進める）
@@ -118,8 +156,18 @@ function ExpenseForm() {
       navigate('/top');
     } catch (err) {
       console.error(err);
-      const errorMsg = err.response?.data?.message || err.response?.data || '申請の送信に失敗しました。';
-      setError(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
+      let errorMsg = '申請の送信に失敗しました。';
+      if (err.response?.data?.errors) {
+        const validationErrors = Object.values(err.response.data.errors).flat();
+        errorMsg = validationErrors.join('\n');
+      } else if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (typeof err.response?.data === 'string' && err.response.data.trim() !== '') {
+        errorMsg = err.response.data;
+      } else {
+        errorMsg = '申請の送信に失敗しました。詳細: ' + JSON.stringify(err.response?.data || err.message);
+      }
+      setError(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -132,7 +180,7 @@ function ExpenseForm() {
       <main className="expense-content">
         <form className="expense-form" onSubmit={handleSubmit}>
           {error && <div className="error-alert">{error}</div>}
-          
+
           {isHighAmount && (
             <div className="warning-alert">
               <AlertTriangle size={20} />
@@ -219,11 +267,11 @@ function ExpenseForm() {
           </div>
 
 
-          {requiresFileUpload && (
-            <div className="file-upload-section required">
+          {showFileUpload && (
+            <div className={`file-upload-section ${requiresFileUpload ? 'required' : ''}`}>
               <label>
                 {formData.expenseType === 'ADVANCE_PAYMENT' ? '見積書または請求書ファイル' : '領収書ファイル'}
-                <span className="badge-required">必須</span>
+                {requiresFileUpload ? <span className="badge-required">必須</span> : <span className="badge-optional" style={{ fontSize: '11px', color: '#6b7280', marginLeft: '8px' }}>任意 (後から提出可能)</span>}
               </label>
               <div className="file-drop-area">
                 <UploadCloud size={32} className="upload-icon" />
@@ -236,12 +284,12 @@ function ExpenseForm() {
                   </div>
                 )}
               </div>
-              
+
               {formData.purchaseMethod === 'AMAZON' && (
-                <div style={{marginTop: '20px'}}>
+                <div style={{ marginTop: '20px' }}>
                   <label>
                     適格請求書ファイル (Amazon)
-                    <span className="badge-required">必須</span>
+                    <span className="badge-optional" style={{ fontSize: '11px', color: '#6b7280', marginLeft: '8px' }}>任意 (後から提出可能)</span>
                   </label>
                   <div className="file-drop-area">
                     <UploadCloud size={32} className="upload-icon" />
