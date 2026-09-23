@@ -22,7 +22,7 @@ function ExpenseForm() {
     reminderFrequency: '7',
   });
   const [expenseItems, setExpenseItems] = useState([
-    { title: '', amount: '', category: '', purchaseUrl: '', details: '', remarks: '' }
+    { title: '', amount: '', category: '', purchaseUrl: '', details: '', remarks: '', isProductUndecided: false }
   ]);
   const [file, setFile] = useState(null);
   const [amazonInvoice, setAmazonInvoice] = useState(null);
@@ -44,10 +44,10 @@ function ExpenseForm() {
   };
 
   const handleItemChange = (index, e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setExpenseItems((prev) => {
       const newItems = [...prev];
-      newItems[index] = { ...newItems[index], [name]: value };
+      newItems[index] = { ...newItems[index], [name]: type === 'checkbox' ? checked : value };
       return newItems;
     });
   };
@@ -55,7 +55,7 @@ function ExpenseForm() {
   const addItem = () => {
     setExpenseItems((prev) => [
       ...prev,
-      { title: '', amount: '', category: '', purchaseUrl: '', details: '', remarks: '' }
+      { title: '', amount: '', category: '', purchaseUrl: '', details: '', remarks: '', isProductUndecided: false }
     ]);
   };
 
@@ -86,8 +86,8 @@ function ExpenseForm() {
         setError(`${i + 1}件目の用途・品目名は255文字以内で入力してください。`);
         return;
       }
-      if ((formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') && !item.purchaseUrl) {
-        setError(`${i + 1}件目がWeb購入またはAmazon購入の場合は、購入元URLを入力してください。`);
+      if ((formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') && !item.isProductUndecided && !item.purchaseUrl) {
+        setError(`${i + 1}件目がWeb購入またはAmazon購入の場合は、購入元URLを入力してください。（未定の場合はチェックを入れてください）`);
         return;
       }
 
@@ -159,7 +159,8 @@ function ExpenseForm() {
           payee: formData.purchaseMethod === 'AMAZON' ? 'Amazon' : '未指定',
           category: item.category,
           description: [item.details, item.remarks].filter(Boolean).join('\n') || null,
-          purchaseUrl: (formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') ? item.purchaseUrl : null
+          purchaseUrl: (formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') && !item.isProductUndecided ? item.purchaseUrl : null,
+          isProductUndecided: item.isProductUndecided || false
         }))
       };
 
@@ -314,10 +315,20 @@ function ExpenseForm() {
               </div>
 
               {(formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') && (
-                <div className="form-group">
-                  <label>購入元URL <span className="badge-required">必須</span></label>
-                  <input type="url" name="purchaseUrl" value={item.purchaseUrl} onChange={(e) => handleItemChange(index, e)} placeholder="https://www.amazon.co.jp/..." required className="input-field" />
-                </div>
+                <>
+                  <div className="form-group" style={{ marginBottom: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', fontWeight: 'normal', cursor: 'pointer', color: '#4b5563' }}>
+                      <input type="checkbox" name="isProductUndecided" checked={item.isProductUndecided || false} onChange={(e) => handleItemChange(index, e)} style={{ marginRight: '8px', width: '16px', height: '16px' }} />
+                      具体的な商品は未定（Discordで相談する）
+                    </label>
+                  </div>
+                  {!item.isProductUndecided && (
+                    <div className="form-group">
+                      <label>購入元URL <span className="badge-required">必須</span></label>
+                      <input type="url" name="purchaseUrl" value={item.purchaseUrl} onChange={(e) => handleItemChange(index, e)} placeholder="https://www.amazon.co.jp/..." required className="input-field" />
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="form-group">

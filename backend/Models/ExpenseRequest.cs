@@ -48,6 +48,9 @@ public class ExpenseRequest
 
     public DateTime? DeletedAt { get; set; } // 論理削除用タイムスタンプ
 
+    public string? DiscordThreadId { get; set; } // 議論用DiscordスレッドID
+    public string? DiscordThreadUrl { get; set; } // 議論用DiscordスレッドURL
+
     // --- Navigation Properties ---
 
     [ForeignKey(nameof(UserId))]
