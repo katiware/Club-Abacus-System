@@ -3,6 +3,7 @@ using System;
 using Club_Abacus_System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Club_Abacus_System.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260921114245_AddPurchaseUrl")]
+    partial class AddPurchaseUrl
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -171,12 +174,6 @@ namespace Club_Abacus_System.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<bool>("IsAmountFinalized")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsAmountVariable")
-                        .HasColumnType("boolean");
-
                     b.Property<int>("PeriodAssignmentStatus")
                         .HasColumnType("integer");
 
@@ -276,9 +273,6 @@ namespace Club_Abacus_System.Migrations
 
                     b.Property<int>("ExpenseType")
                         .HasColumnType("integer");
-
-                    b.Property<bool>("IsAmountVariable")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("ItemName")
                         .IsRequired()

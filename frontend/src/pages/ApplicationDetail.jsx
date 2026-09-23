@@ -210,6 +210,7 @@ function ApplicationDetail() {
       title: app.expenseItems[0]?.itemName || '',
       amount: app.totalAmount || '',
       category: app.expenseItems[0]?.category || '',
+      purchaseUrl: app.expenseItems[0]?.purchaseUrl || '',
     });
     setShowEditModal(true);
   };
@@ -226,7 +227,8 @@ function ApplicationDetail() {
             quantity: 1,
             payee: app.expenseItems[0]?.payee || '未指定',
             category: editData.category,
-            description: app.expenseItems[0]?.description || null
+            description: app.expenseItems[0]?.description || null,
+            purchaseUrl: (app.receiptType === 'Digital' || app.receiptType === 'Amazon') ? editData.purchaseUrl : null
           }
         ]
       };
@@ -284,6 +286,7 @@ function ApplicationDetail() {
   const title = app.expenseItems && app.expenseItems.length > 0 ? app.expenseItems[0].itemName : '品目なし';
   const category = app.expenseItems && app.expenseItems.length > 0 ? app.expenseItems[0].category : '-';
   const description = app.expenseItems && app.expenseItems.length > 0 ? app.expenseItems[0].description : '';
+  const purchaseUrl = app.expenseItems && app.expenseItems.length > 0 ? app.expenseItems[0].purchaseUrl : '';
   const typeStr = app.type === 'Advance' ? '事前出金' : '立替払い';
   const methodStr = app.receiptType === 'Paper' ? '実店舗購入' : 'Web購入';
   const dateStr = new Date(app.createdAt).toLocaleDateString();
@@ -325,6 +328,16 @@ function ApplicationDetail() {
                 <span className="info-label">用途・品目</span>
                 <span className="info-value large-text">{title}</span>
               </div>
+              {purchaseUrl && (
+                <div className="info-item full-width">
+                  <span className="info-label">購入元URL</span>
+                  <span className="info-value">
+                    <a href={purchaseUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">
+                      {purchaseUrl}
+                    </a>
+                  </span>
+                </div>
+              )}
               <div className="info-item full-width amount-highlight">
                 <span className="info-label">申請金額</span>
                 <span className="info-value amount-text">
@@ -562,6 +575,16 @@ function ApplicationDetail() {
                 <option value="その他">その他</option>
               </select>
             </div>
+            {(app.receiptType === 'Digital' || app.receiptType === 'Amazon') && (
+              <div className="modal-form-group">
+                <label>購入元URL</label>
+                <input 
+                  type="url" 
+                  value={editData.purchaseUrl} 
+                  onChange={e => setEditData({...editData, purchaseUrl: e.target.value})} 
+                />
+              </div>
+            )}
             <div className="modal-actions">
               <button className="btn-cancel" onClick={() => setShowEditModal(false)}>キャンセル</button>
               <button className="btn-save" onClick={handleEditSave}>保存する</button>

@@ -31,6 +31,9 @@ public class ExpenseItem
 
     public string? Description { get; set; } // 用途詳細
 
+    [MaxLength(2000)]
+    public string? PurchaseUrl { get; set; } // Web/Amazon購入時のURL
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

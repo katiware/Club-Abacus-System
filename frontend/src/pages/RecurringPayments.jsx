@@ -55,6 +55,19 @@ function RecurringPayments() {
     }
   };
 
+  const handleGenerateManual = async (id, name) => {
+    if (window.confirm(`${name} の申請を手動で臨時生成しますか？\n（下書きとして生成され、次回生成日も1周期進みます）`)) {
+      try {
+        const res = await api.post(`/RecurringExpense/${id}/generate`);
+        alert('手動生成に成功しました。生成された申請の詳細画面へ移動します。');
+        navigate(`/application/${res.data.expenseRequestId}`);
+      } catch (err) {
+        console.error('Failed to generate manual', err);
+        alert(err.response?.data || '生成に失敗しました。');
+      }
+    }
+  };
+
   const getFreqString = (freq) => freq === 'Monthly' || freq === 0 ? '毎月' : '毎年';
   const isActive = (status) => status === 'Active' || status === 0;
 
@@ -94,14 +107,25 @@ function RecurringPayments() {
                     次回生成日: <strong>{tpl.nextGenerationDate}</strong>
                   </div>
 
-                  <div className="tpl-footer">
+                  <div className="tpl-footer" style={{ display: 'flex', gap: '8px' }}>
                     <button 
                       className={`status-toggle-btn ${active ? 'active' : 'paused'}`}
                       onClick={() => toggleStatus(tpl.id, tpl.templateStatus)}
+                      style={{ flex: 1 }}
                     >
                       {active ? <Pause size={16} /> : <Play size={16} />}
                       {active ? '一時停止する' : '再開する'}
                     </button>
+                    {active && (
+                      <button 
+                        className="status-toggle-btn"
+                        style={{ flex: 1, backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #cbd5e1' }}
+                        onClick={() => handleGenerateManual(tpl.id, tpl.templateName)}
+                        title="バッチが失敗した時などの保険用（手動で生成して日付を進めます）"
+                      >
+                        手動生成
+                      </button>
+                    )}
                   </div>
                 </div>
               );

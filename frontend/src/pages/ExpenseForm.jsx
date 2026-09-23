@@ -12,6 +12,7 @@ function ExpenseForm() {
     amount: '',
     expenseType: 'PAY_OUT_OF_POCKET', // 'PAY_OUT_OF_POCKET' (立替払い) | 'ADVANCE_PAYMENT' (事前出金)
     purchaseMethod: 'WEB', // 'WEB' (Web購入) | 'STORE' (実店舗購入) | 'AMAZON' (Amazon購入)
+    purchaseUrl: '',
     category: '',
     details: '',
     remarks: '',
@@ -56,6 +57,10 @@ function ExpenseForm() {
     }
     if (formData.title.length > 255) {
       setError('用途・品目名は255文字以内で入力してください。');
+      return;
+    }
+    if ((formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') && !formData.purchaseUrl) {
+      setError('Web購入またはAmazon購入の場合は、購入元URLを入力してください。');
       return;
     }
 
@@ -121,7 +126,8 @@ function ExpenseForm() {
             quantity: 1,
             payee: formData.purchaseMethod === 'AMAZON' ? 'Amazon' : '未指定',
             category: formData.category,
-            description: [formData.details, formData.remarks].filter(Boolean).join('\n') || null
+            description: [formData.details, formData.remarks].filter(Boolean).join('\n') || null,
+            purchaseUrl: (formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') ? formData.purchaseUrl : null
           }
         ]
       };
@@ -245,6 +251,22 @@ function ExpenseForm() {
               </div>
             </div>
           </div>
+
+          {(formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') && (
+            <div className="form-group">
+              <label htmlFor="purchaseUrl">購入元URL <span className="badge-required">必須</span></label>
+              <input
+                type="url"
+                id="purchaseUrl"
+                name="purchaseUrl"
+                value={formData.purchaseUrl}
+                onChange={handleInputChange}
+                placeholder="https://www.amazon.co.jp/..."
+                required
+                className="input-field"
+              />
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="details">用途詳細</label>
