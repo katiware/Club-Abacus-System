@@ -3,7 +3,7 @@ using Club_Abacus_System.Models;
 
 namespace Club_Abacus_System.DTOs.Expenses;
 
-public class ExpenseRequestCreateDto
+public class ExpenseUpdateDto
 {
     [Required(ErrorMessage = "申請タイトルは必須です")]
     [MaxLength(255, ErrorMessage = "タイトルは255文字以内で入力してください")]

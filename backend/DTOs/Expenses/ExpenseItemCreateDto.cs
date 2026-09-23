@@ -25,4 +25,7 @@ public class ExpenseItemCreateDto
     public string Category { get; set; } = string.Empty;
 
     public string? Description { get; set; }
+
+    [MaxLength(2000)]
+    public string? PurchaseUrl { get; set; }
 }

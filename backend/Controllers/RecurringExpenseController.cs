@@ -147,4 +147,80 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
 
         return NoContent();
     }
+
+    /// <summary>
+    /// 定期支払いテンプレートから手動で申請を下書き生成します（保険機能）。
+    /// </summary>
+    [HttpPost("{id}/generate")]
+    [RequirePermission(PermissionType.ManageMasterData)]
+    public async Task<IActionResult> GenerateManual(Guid id)
+    {
+        var template = await context.RecurringExpenseTemplates
+            .FirstOrDefaultAsync(t => t.Id == id);
+
+        if (template == null)
+        {
+            return NotFound("指定されたテンプレートは見つかりません。");
+        }
+
+        if (template.TemplateStatus != TemplateStatus.Active || template.DeletedAt != null)
+        {
+            return BadRequest("無効なテンプレートからは生成できません。");
+        }
+
+        // 下書き状態の ExpenseRequest を生成
+        var expenseRequest = new ExpenseRequest
+        {
+            UserId = template.UserId,
+            Type = template.ExpenseType,
+            ReceiptType = template.ReceiptType,
+            Status = ExpenseStatus.Draft, // 下書きからスタート
+            RecurringTemplateId = template.Id,
+            TotalAmount = template.Amount,
+            IsAmountVariable = template.IsAmountVariable,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            ExpenseItems = new List<ExpenseItem>
+            {
+                new ExpenseItem
+                {
+                    ItemName = template.ItemName,
+                    UnitPrice = template.Amount,
+                    Quantity = 1,
+                    Payee = template.Payee,
+                    Category = template.Category,
+                    Description = "【手動臨時生成】"
+                }
+            }
+        };
+
+        context.ExpenseRequests.Add(expenseRequest);
+
+        // AuditLogの記録
+        context.AuditLogs.Add(new AuditLog
+        {
+            TargetType = "ExpenseRequests",
+            TargetId = expenseRequest.Id,
+            UserId = template.UserId, // 実行者のIDにするのが理想ですが、今はテンプレート作成者としておきます
+            Action = "CREATE_MANUAL_FROM_RECURRING",
+            NewValue = "手動で定期払いテンプレートから下書き生成されました。"
+        });
+
+        // 次回生成日の計算（ユーザー指示により進める）
+        if (template.RecurringFrequency == RecurringFrequency.Monthly)
+        {
+            template.NextGenerationDate = template.NextGenerationDate.AddMonths(1);
+        }
+        else if (template.RecurringFrequency == RecurringFrequency.Yearly)
+        {
+            template.NextGenerationDate = template.NextGenerationDate.AddYears(1);
+        }
+
+        template.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        return Ok(new { expenseRequestId = expenseRequest.Id });
+    }
+
 }

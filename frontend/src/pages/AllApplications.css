@@ -118,6 +118,16 @@
   color: #1e293b;
 }
 
+.status-badge.danger-text {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.status-badge.warning-text {
+  background-color: #fff3e0;
+  color: #ef6c00;
+}
+
 /* Table Styles */
 .table-wrapper {
   overflow-x: auto;

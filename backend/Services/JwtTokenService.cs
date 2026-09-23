@@ -29,12 +29,20 @@ public class JwtTokenService : IJwtTokenService
             new Claim(ClaimTypes.Role, user.Role.Name)
         };
 
-        // Add permissions from the role (if stored in DB or logic)
-        // For now, let's grant all permissions if Role is Admin, otherwise basic permissions.
-        var permissions = Enum.GetValues<PermissionType>();
-        foreach (var permission in permissions)
+        // Add permissions based on role
+        if (user.Role.Name == "ADMIN")
         {
-            claims.Add(new Claim("Permission", permission.ToString()));
+            // 管理者はすべての権限を持つ
+            var permissions = Enum.GetValues<PermissionType>();
+            foreach (var permission in permissions)
+            {
+                claims.Add(new Claim("Permission", permission.ToString()));
+            }
+        }
+        else
+        {
+            // 一般ユーザーは自分の申請管理のみ
+            claims.Add(new Claim("Permission", PermissionType.ExpenseManageOwn.ToString()));
         }
 
         var token = new JwtSecurityToken(

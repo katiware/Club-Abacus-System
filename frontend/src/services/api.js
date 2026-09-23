@@ -6,9 +6,6 @@ const apiUrl = rawBaseUrl ? `${rawBaseUrl}/api` : 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: apiUrl,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 // Request interceptor to attach auth token if available
