@@ -28,4 +28,6 @@ public class ExpenseItemCreateDto
 
     [MaxLength(2000)]
     public string? PurchaseUrl { get; set; }
+
+    public bool IsProductUndecided { get; set; } = false;
 }

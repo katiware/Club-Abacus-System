@@ -22,13 +22,17 @@ builder.Services.AddControllers()
 builder.Services.AddScoped<Club_Abacus_System.Services.IJwtTokenService, Club_Abacus_System.Services.JwtTokenService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IFileStorageService, Club_Abacus_System.Services.LocalFileStorageService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseDocumentService, Club_Abacus_System.Services.ExpenseDocumentService>();
+builder.Services.AddScoped<Club_Abacus_System.Services.IDiscordIntegrationService, Club_Abacus_System.Services.DiscordIntegrationService>();
 builder.Services.AddHostedService<Club_Abacus_System.Services.RecurringExpenseBatchService>();
 
-builder.Services.AddHttpClient("GoogleCerts", c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(sp => 
 {
-    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
-    var httpClient = httpClientFactory.CreateClient("GoogleCerts");
+    // 依存性の注入(IHttpClientFactory)を使わずに直接HttpClientを生成します。
+    // これにより、Aspireのデフォルトのタイムアウト（約10秒）を回避し、
+    // IPv6の接続に失敗した場合でもOSがIPv4にフォールバックする時間（約21秒）を確保できます。
+    var handler = new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2) };
+    var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+    
     return new ConfigurationManager<OpenIdConnectConfiguration>(
         "https://accounts.google.com/.well-known/openid-configuration",
         new OpenIdConnectConfigurationRetriever(),

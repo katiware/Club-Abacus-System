@@ -21,7 +21,7 @@ namespace Club_Abacus_System.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ExpenseController(AppDbContext context) : ControllerBase
+public class ExpenseController(AppDbContext context, Club_Abacus_System.Services.IDiscordIntegrationService discordService) : ControllerBase
 {
     /// <summary>
     /// ダッシュボード用の集計データを取得します。
@@ -150,7 +150,9 @@ public class ExpenseController(AppDbContext context) : ControllerBase
                 Quantity = itemDto.Quantity,
                 Payee = itemDto.Payee,
                 Category = itemDto.Category,
-                Description = itemDto.Description
+                Description = itemDto.Description,
+                PurchaseUrl = itemDto.PurchaseUrl,
+                IsProductUndecided = itemDto.IsProductUndecided
             }).ToList() ?? new List<ExpenseItem>()
         };
 
@@ -165,6 +167,14 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         });
 
         await context.SaveChangesAsync(cancellationToken);
+
+        // 商品未定フラグが立っている明細がある場合、Discordに議論用スレッドを作成する
+        if (expenseRequest.ExpenseItems.Any(i => i.IsProductUndecided))
+        {
+            await discordService.CreatePurchaseDiscussionThreadAsync(expenseRequest);
+            // サービス内でスレッドIDなどを保存した場合はもう一度Save
+            await context.SaveChangesAsync(cancellationToken);
+        }
 
         return CreatedAtAction(nameof(GetExpenseRequestById), new { id = expenseRequest.Id }, expenseRequest);
     }
@@ -378,7 +388,9 @@ public class ExpenseController(AppDbContext context) : ControllerBase
             Quantity = item.Quantity,
             Payee = item.Payee,
             Category = item.Category,
-            Description = item.Description
+            Description = item.Description,
+            PurchaseUrl = item.PurchaseUrl,
+            IsProductUndecided = item.IsProductUndecided
         }).ToList();
         
         context.ExpenseItems.AddRange(newItems);

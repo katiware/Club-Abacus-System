@@ -34,6 +34,8 @@ public class ExpenseItem
     [MaxLength(2000)]
     public string? PurchaseUrl { get; set; } // Web/Amazon購入時のURL
 
+    public bool IsProductUndecided { get; set; } = false; // 商品未定フラグ（Discordでの議論用）
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

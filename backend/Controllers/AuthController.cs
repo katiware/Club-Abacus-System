@@ -46,7 +46,7 @@ public class AuthController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Token validation failed.");
+            logger.LogError(ex, "Token validation failed. Type: {ExceptionType}, Message: {Message}, Inner: {InnerMessage}", ex.GetType().Name, ex.Message, ex.InnerException?.Message ?? "None");
             return null;
         }
     }
