@@ -12,6 +12,10 @@ public class ExpenseRequest
     public Guid UserId { get; set; } // 外部キー → Users（申請者）
 
     [Required]
+    [MaxLength(255)]
+    public string Title { get; set; } = string.Empty; // 申請のタイトル（例: 8月分サーバー代など）
+
+    [Required]
     public ExpenseType Type { get; set; } // REIMBURSEMENT（立替）/ ADVANCE（事前出金）
 
     [Required]

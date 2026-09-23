@@ -57,6 +57,21 @@ function MyApplications() {
     if (!file || !uploadingApp) return;
 
     setIsSubmitting(true);
+
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+    
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`ファイルサイズが10MBを超えています。`);
+      setIsSubmitting(false);
+      return;
+    }
+    if (!allowedTypes.includes(file.type)) {
+      alert(`ファイル形式はJPG/PNG/WEBP/PDFのみ対応しています。`);
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
       // 未確定金額がある場合は先に確定させる
       if (uploadingApp.isAmountVariable && !uploadingApp.isAmountFinalized) {
@@ -120,7 +135,12 @@ function MyApplications() {
 
   const getTypeStr = (type) => type === 'Reimbursement' ? '立替払い' : '事前出金';
   const getReceiptTypeStr = (receiptType) => receiptType === 'Paper' ? '実店舗購入' : 'Web購入';
-  const getTitle = (app) => app.expenseItems && app.expenseItems.length > 0 ? app.expenseItems[0].itemName : '品目なし';
+  const getTitle = (app) => {
+    if (app.title) return app.title;
+    if (!app.expenseItems || app.expenseItems.length === 0) return '品目なし';
+    const firstItem = app.expenseItems[0].itemName;
+    return app.expenseItems.length > 1 ? `${firstItem} ほか${app.expenseItems.length - 1}件` : firstItem;
+  };
 
   return (
     <div className="my-apps-container fade-in">
@@ -136,7 +156,7 @@ function MyApplications() {
         ) : (
           <div className="cards-wrapper">
             {applications.map(app => (
-              <div key={app.id} className="app-card">
+              <div key={app.id} className="app-card" onClick={() => navigate(`/applications/${app.id}`)}>
                 <div className="app-card-header">
                   <span className="app-id">ID: {app.id.substring(0, 8)}</span>
                   <span className="app-date">{new Date(app.createdAt).toLocaleDateString()}</span>
@@ -158,7 +178,10 @@ function MyApplications() {
                   {needsUpload(app) && (
                     <button 
                       className="upload-btn"
-                      onClick={() => openUploadModal(app)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openUploadModal(app);
+                      }}
                     >
                       <UploadCloud size={16} />
                       証憑を提出

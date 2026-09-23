@@ -5,6 +5,10 @@ namespace Club_Abacus_System.DTOs.Expenses;
 
 public class ExpenseUpdateDto
 {
+    [Required(ErrorMessage = "申請タイトルは必須です")]
+    [MaxLength(255, ErrorMessage = "タイトルは255文字以内で入力してください")]
+    public string Title { get; set; } = string.Empty;
+
     [Required(ErrorMessage = "事前出金か立替払いを選択してください")]
     public ExpenseType Type { get; set; }
 

@@ -138,6 +138,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         var expenseRequest = new ExpenseRequest
         {
             UserId = currentUserId,
+            Title = dto.Title,
             Type = dto.Type,
             ReceiptType = dto.ReceiptType,
             Status = ExpenseStatus.Draft, // 初期ステータス（下書き）
@@ -360,6 +361,7 @@ public class ExpenseController(AppDbContext context) : ControllerBase
         }
 
         // 申請ヘッダの更新
+        expenseRequest.Title = dto.Title;
         expenseRequest.Type = dto.Type;
         expenseRequest.ReceiptType = dto.ReceiptType;
         expenseRequest.TotalAmount = dto.ExpenseItems.Sum(x => x.UnitPrice * x.Quantity);
