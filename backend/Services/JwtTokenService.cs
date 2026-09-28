@@ -39,6 +39,24 @@ public class JwtTokenService : IJwtTokenService
                 claims.Add(new Claim("Permission", permission.ToString()));
             }
         }
+        else if (user.Role.Name == "MANAGER")
+        {
+            // 主将会計は会計業務、マスターデータ管理、全体閲覧、自身の申請管理を持つ
+            var managerPermissions = new[]
+            {
+                PermissionType.ExpenseManageOwn,
+                PermissionType.ExpenseReadAll,
+                PermissionType.ExpenseApprove,
+                PermissionType.ExpenseConfirmReceipt,
+                PermissionType.ExpenseSubmitToUniversity,
+                PermissionType.ExpenseSettle,
+                PermissionType.ManageMasterData // 定期支払いや年度・予算の管理に必要
+            };
+            foreach (var permission in managerPermissions)
+            {
+                claims.Add(new Claim("Permission", permission.ToString()));
+            }
+        }
         else
         {
             // 一般ユーザーは自分の申請管理のみ
