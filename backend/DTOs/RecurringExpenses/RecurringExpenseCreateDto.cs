@@ -13,6 +13,10 @@ public class RecurringExpenseCreateDto
     public string TemplateName { get; set; } = string.Empty;
 
     [Required]
+    [MaxLength(255)]
+    public string Title { get; set; } = string.Empty;
+
+    [Required]
     public RecurringFrequency RecurringFrequency { get; set; }
 
     [Required]
@@ -38,6 +42,11 @@ public class RecurringExpenseCreateDto
     [Required]
     [MaxLength(100)]
     public string Category { get; set; } = string.Empty;
+
+    public string? Description { get; set; }
+
+    [MaxLength(2000)]
+    public string? PurchaseUrl { get; set; }
 
     [Required]
     public DateOnly NextGenerationDate { get; set; }

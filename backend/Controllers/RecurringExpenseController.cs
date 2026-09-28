@@ -72,6 +72,7 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         {
             UserId = dto.UserId,
             TemplateName = dto.TemplateName,
+            Title = dto.Title,
             RecurringFrequency = dto.RecurringFrequency,
             ExpenseType = dto.ExpenseType,
             ReceiptType = dto.ReceiptType,
@@ -80,6 +81,8 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
             IsAmountVariable = dto.IsAmountVariable,
             Payee = dto.Payee,
             Category = dto.Category,
+            Description = dto.Description,
+            PurchaseUrl = dto.PurchaseUrl,
             NextGenerationDate = dto.NextGenerationDate,
             TemplateStatus = TemplateStatus.Active,
             CreatedAt = DateTime.UtcNow,
@@ -108,12 +111,15 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         }
 
         if (dto.TemplateName != null) template.TemplateName = dto.TemplateName;
+        if (dto.Title != null) template.Title = dto.Title;
         if (dto.TemplateStatus.HasValue) template.TemplateStatus = dto.TemplateStatus.Value;
         if (dto.ItemName != null) template.ItemName = dto.ItemName;
         if (dto.Amount.HasValue) template.Amount = dto.Amount.Value;
         if (dto.IsAmountVariable.HasValue) template.IsAmountVariable = dto.IsAmountVariable.Value;
         if (dto.Payee != null) template.Payee = dto.Payee;
         if (dto.Category != null) template.Category = dto.Category;
+        if (dto.Description != null) template.Description = dto.Description;
+        if (dto.PurchaseUrl != null) template.PurchaseUrl = dto.PurchaseUrl;
         if (dto.NextGenerationDate.HasValue) template.NextGenerationDate = dto.NextGenerationDate.Value;
 
         await context.SaveChangesAsync();
@@ -172,6 +178,7 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         var expenseRequest = new ExpenseRequest
         {
             UserId = template.UserId,
+            Title = template.Title,
             Type = template.ExpenseType,
             ReceiptType = template.ReceiptType,
             Status = ExpenseStatus.Draft, // 下書きからスタート
@@ -189,7 +196,8 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
                     Quantity = 1,
                     Payee = template.Payee,
                     Category = template.Category,
-                    Description = "【手動臨時生成】"
+                    Description = string.IsNullOrEmpty(template.Description) ? "【手動臨時生成】" : $"【手動臨時生成】\n{template.Description}",
+                    PurchaseUrl = template.PurchaseUrl
                 }
             }
         };

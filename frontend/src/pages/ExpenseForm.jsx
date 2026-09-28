@@ -71,6 +71,55 @@ function ExpenseForm() {
     }
   };
 
+  const handleDraftSave = async () => {
+    setError(null);
+    if (!formData.title || formData.title.trim() === '') {
+      setError('申請タイトルを入力してください。（下書き保存時も必須です）');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const expenseType = formData.expenseType === 'ADVANCE_PAYMENT' ? 'Advance' : 'Reimbursement';
+      const receiptType = formData.purchaseMethod === 'STORE' ? 'Paper' : 'Digital';
+
+      const requestPayload = {
+        title: formData.title,
+        type: expenseType,
+        receiptType: receiptType,
+        expenseItems: expenseItems.map(item => ({
+          itemName: item.title || '（未入力）',
+          unitPrice: parseInt(item.amount, 10) || 0,
+          quantity: 1,
+          payee: formData.purchaseMethod === 'AMAZON' ? 'Amazon' : '未指定',
+          category: item.category || 'OTHER',
+          description: [item.details, item.remarks].filter(Boolean).join('\n') || null,
+          purchaseUrl: item.purchaseUrl || null,
+          isProductUndecided: item.isProductUndecided || false
+        }))
+      };
+
+      const response = await api.post('/Expense', requestPayload);
+      const requestId = response.data.id;
+
+      if (file) {
+        const fileFormData = new FormData();
+        fileFormData.append('file', file);
+        const docType = formData.expenseType === 'ADVANCE_PAYMENT' ? 'Quotation' : 'Receipt';
+        fileFormData.append('documentType', docType);
+        await api.post(`/expenses/${requestId}/documents`, fileFormData);
+      }
+
+      alert('下書きとして保存しました。');
+      navigate('/applications');
+    } catch (err) {
+      console.error(err);
+      setError('下書き保存に失敗しました。');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -398,9 +447,12 @@ function ExpenseForm() {
             </div>
           )}
 
-          <div className="form-actions">
+          <div className="form-actions" style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+            <button type="button" className="draft-button" onClick={handleDraftSave} disabled={isSubmitting} style={{ padding: '12px 24px', backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>
+              下書きとして保存
+            </button>
             <button type="submit" className="submit-button" disabled={isSubmitting}>
-              確認画面へ
+              確認画面へ (提出)
             </button>
           </div>
         </form>
