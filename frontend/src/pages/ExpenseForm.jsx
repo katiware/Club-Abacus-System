@@ -320,7 +320,6 @@ function ExpenseForm() {
               <option value="3">3日ごと</option>
               <option value="7">7日ごと (デフォルト)</option>
               <option value="14">14日ごと</option>
-              <option value="0">通知しない</option>
             </select>
           </div>
 

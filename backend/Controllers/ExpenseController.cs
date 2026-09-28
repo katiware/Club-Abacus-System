@@ -287,6 +287,8 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         // ステータスを「承認待ち」に進める
         expenseRequest.Status = ExpenseStatus.PendingApproval;
         expenseRequest.UpdatedAt = DateTime.UtcNow;
+        expenseRequest.IsEditedAfterApproval = false;
+        expenseRequest.EditReason = null;
 
         context.AuditLogs.Add(new AuditLog
         {
@@ -328,6 +330,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         expenseRequest.Status = ExpenseStatus.Remanded;
         expenseRequest.RejectionReason = dto.Reason;
         expenseRequest.UpdatedAt = DateTime.UtcNow;
+        expenseRequest.IsEditedAfterApproval = false;
 
         context.AuditLogs.Add(new AuditLog
         {
@@ -365,9 +368,17 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             return Forbid("他人の申請を操作することはできません。");
         }
 
-        if (expenseRequest.Status != ExpenseStatus.Draft && expenseRequest.Status != ExpenseStatus.Remanded)
+        if (expenseRequest.Status != ExpenseStatus.Draft && 
+            expenseRequest.Status != ExpenseStatus.Remanded &&
+            expenseRequest.Status != ExpenseStatus.PendingApproval &&
+            expenseRequest.Status != ExpenseStatus.Approved)
         {
             return BadRequest("承認プロセスが進行中のため、編集できません。");
+        }
+
+        if ((expenseRequest.Status == ExpenseStatus.PendingApproval || expenseRequest.Status == ExpenseStatus.Approved) && string.IsNullOrWhiteSpace(dto.EditReason))
+        {
+            return BadRequest("提出済みの申請を編集する場合は、変更理由（EditReason）を入力してください。");
         }
 
         // 申請ヘッダの更新
@@ -402,6 +413,27 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             UserId = currentUserId,
             Action = "EDIT_CONTENT"
         });
+
+        if (expenseRequest.Status == ExpenseStatus.PendingApproval || 
+            expenseRequest.Status == ExpenseStatus.Approved)
+        {
+            expenseRequest.Status = ExpenseStatus.PendingApproval;
+            expenseRequest.ApprovedById = null;
+            expenseRequest.ApprovedAt = null;
+            expenseRequest.IsEditedAfterApproval = true;
+            expenseRequest.EditReason = dto.EditReason;
+
+            await discordService.NotifyExpenseReApprovalRequiredAsync(expenseRequest);
+            
+            context.AuditLogs.Add(new AuditLog
+            {
+                TargetType = "ExpenseRequests",
+                TargetId = expenseRequest.Id,
+                UserId = currentUserId,
+                Action = "REVERT_TO_PENDING_DUE_TO_EDIT",
+                NewValue = $"内容が編集されたため、再度承認待ちに戻りました。理由: {dto.EditReason}"
+            });
+        }
 
         await context.SaveChangesAsync(cancellationToken);
         return Ok();
@@ -446,6 +478,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         }
 
         expenseRequest.Status = dto.Status;
+        expenseRequest.IsEditedAfterApproval = false;
 
         if (dto.Status == ExpenseStatus.Rejected)
         {
