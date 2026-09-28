@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 import { FileText, ArrowLeft, UploadCloud, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
@@ -15,6 +15,7 @@ const CATEGORY_MAP = {
 
 function ExpenseForm() {
   const navigate = useNavigate();
+  const { id } = useParams();
   const [formData, setFormData] = useState({
     title: '',
     expenseType: 'PAY_OUT_OF_POCKET', // 'PAY_OUT_OF_POCKET' (立替払い) | 'ADVANCE_PAYMENT' (事前出金)
@@ -24,16 +25,46 @@ function ExpenseForm() {
   const [expenseItems, setExpenseItems] = useState([
     { title: '', amount: '', category: '', purchaseUrl: '', details: '', remarks: '', isProductUndecided: false }
   ]);
-  const [file, setFile] = useState(null);
-  const [amazonInvoice, setAmazonInvoice] = useState(null);
   const [error, setError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isLoadingDraft, setIsLoadingDraft] = useState(!!id);
 
   const totalAmount = expenseItems.reduce((sum, item) => sum + (parseInt(item.amount, 10) || 0), 0);
   const isHighAmount = totalAmount >= 50000;
-  const requiresFileUpload = formData.expenseType === 'ADVANCE_PAYMENT';
-  const showFileUpload = true; // 実店舗購入も含め、すべての購入方法で証憑提出画面を表示する
+
+  React.useEffect(() => {
+    if (id) {
+      const fetchDraft = async () => {
+        try {
+          const res = await api.get(`/Expense/${id}`);
+          const data = res.data;
+          setFormData({
+            title: data.title || '',
+            expenseType: data.type === 'Advance' ? 'ADVANCE_PAYMENT' : 'PAY_OUT_OF_POCKET',
+            purchaseMethod: data.receiptType === 'Paper' ? 'STORE' : (data.receiptType === 'Amazon' ? 'AMAZON' : 'WEB')
+          });
+          if (data.expenseItems && data.expenseItems.length > 0) {
+            setExpenseItems(data.expenseItems.map(item => ({
+              title: item.itemName || '',
+              amount: item.unitPrice || '',
+              category: item.category || '',
+              purchaseUrl: item.purchaseUrl || '',
+              details: item.description || '',
+              remarks: '',
+              isProductUndecided: item.isProductUndecided || false
+            })));
+          }
+        } catch (err) {
+          console.error(err);
+          setError('下書きデータの取得に失敗しました。');
+        } finally {
+          setIsLoadingDraft(false);
+        }
+      };
+      fetchDraft();
+    }
+  }, [id]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -65,12 +96,6 @@ function ExpenseForm() {
     }
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
-
   const handleDraftSave = async () => {
     setError(null);
     if (!formData.title || formData.title.trim() === '') {
@@ -99,19 +124,14 @@ function ExpenseForm() {
         }))
       };
 
-      const response = await api.post('/Expense', requestPayload);
-      const requestId = response.data.id;
-
-      if (file) {
-        const fileFormData = new FormData();
-        fileFormData.append('file', file);
-        const docType = formData.expenseType === 'ADVANCE_PAYMENT' ? 'Quotation' : 'Receipt';
-        fileFormData.append('documentType', docType);
-        await api.post(`/expenses/${requestId}/documents`, fileFormData);
+      if (id) {
+        await api.put(`/Expense/${id}`, requestPayload);
+      } else {
+        await api.post('/Expense', requestPayload);
       }
 
       alert('下書きとして保存しました。');
-      navigate('/applications');
+      navigate('/my-applications');
     } catch (err) {
       console.error(err);
       setError('下書き保存に失敗しました。');
@@ -152,36 +172,6 @@ function ExpenseForm() {
       }
     }
 
-    if (requiresFileUpload && !file) {
-      setError('事前出金の場合は、見積書等のファイルのアップロードが必須です。');
-      return;
-    }
-
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-
-    if (file) {
-      if (file.size > MAX_FILE_SIZE) {
-        setError(`証憑ファイル (${file.name}) のサイズが10MBを超えています。`);
-        return;
-      }
-      if (!allowedTypes.includes(file.type)) {
-        setError(`証憑ファイル (${file.name}) はJPG/PNG/WEBP/PDFのみ対応しています。`);
-        return;
-      }
-    }
-
-    if (formData.purchaseMethod === 'AMAZON' && amazonInvoice) {
-      if (amazonInvoice.size > MAX_FILE_SIZE) {
-        setError(`適格請求書ファイル (${amazonInvoice.name}) のサイズが10MBを超えています。`);
-        return;
-      }
-      if (!allowedTypes.includes(amazonInvoice.type)) {
-        setError(`適格請求書ファイル (${amazonInvoice.name}) はJPG/PNG/WEBP/PDFのみ対応しています。`);
-        return;
-      }
-    }
-
     if (!formData.title || formData.title.trim() === '') {
       setError('申請タイトルを入力してください。');
       return;
@@ -213,31 +203,17 @@ function ExpenseForm() {
         }))
       };
 
-      // 1. 経費申請の作成
-      const response = await api.post('/Expense', requestPayload);
-      const createdRequest = response.data;
-      const requestId = createdRequest.id;
-
-      // 2. 証憑ファイルがある場合のみアップロード
-      if (file) {
-        const fileFormData = new FormData();
-        fileFormData.append('file', file);
-        const docType = formData.expenseType === 'ADVANCE_PAYMENT' ? 'Quotation' : 'Receipt';
-        fileFormData.append('documentType', docType);
-
-        await api.post(`/expenses/${requestId}/documents`, fileFormData);
+      let requestId = id;
+      if (id) {
+        // 1. 既存の経費申請の更新
+        await api.put(`/Expense/${id}`, requestPayload);
+      } else {
+        // 1. 経費申請の作成
+        const response = await api.post('/Expense', requestPayload);
+        requestId = response.data.id;
       }
 
-      // Amazon購入で適格請求書がある場合のみ追加アップロード
-      if (formData.purchaseMethod === 'AMAZON' && amazonInvoice) {
-        const invoiceFormData = new FormData();
-        invoiceFormData.append('file', amazonInvoice);
-        invoiceFormData.append('documentType', 'Invoice');
-
-        await api.post(`/expenses/${requestId}/documents`, invoiceFormData);
-      }
-
-      // 3. 申請を提出（PendingApprovalへ進める）
+      // 2. 申請を提出（PendingApprovalへ進める）
       await api.post(`/Expense/${requestId}/submit`);
 
       navigate('/top');
@@ -260,9 +236,13 @@ function ExpenseForm() {
     }
   };
 
+  if (isLoadingDraft) {
+    return <div className="expense-container"><div className="p-8 text-center text-gray-500">読み込み中...</div></div>;
+  }
+
   return (
     <div className="expense-container">
-      <PageHeader title="新規経費申請" backTo="/top" />
+      <PageHeader title={id ? "経費申請の編集 (下書き)" : "新規経費申請"} backTo="/top" />
 
       <main className="expense-content">
         <form className="expense-form" onSubmit={handleSubmit}>
@@ -395,56 +375,6 @@ function ExpenseForm() {
             <Plus size={18} />
             明細を追加する
           </button>
-
-
-          {showFileUpload && (
-            <div className={`file-upload-section ${requiresFileUpload ? 'required' : ''}`}>
-              <label>
-                {formData.expenseType === 'ADVANCE_PAYMENT' ? '見積書または請求書ファイル' : '領収書ファイル'}
-                {requiresFileUpload ? <span className="badge-required">必須</span> : <span className="badge-optional" style={{ fontSize: '11px', color: '#6b7280', marginLeft: '8px' }}>任意 (後から提出可能)</span>}
-              </label>
-              {!requiresFileUpload && (
-                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
-                  ※立替払いで既に購入済み（事後申請）の場合のみ添付してください。購入前の方は空のままで進み、後日マイページから提出してください。
-                </div>
-              )}
-              <div className="file-drop-area">
-                <UploadCloud size={32} className="upload-icon" />
-                <p>クリックしてファイルを選択するか、ドラッグ＆ドロップしてください</p>
-                <input type="file" className="file-input" onChange={handleFileChange} accept=".pdf,image/*" />
-                {file && (
-                  <div className="file-name">
-                    <FileText size={16} />
-                    {file.name}
-                  </div>
-                )}
-              </div>
-
-              {formData.purchaseMethod === 'AMAZON' && (
-                <div style={{ marginTop: '20px' }}>
-                  <label>
-                    適格請求書ファイル (Amazon)
-                    <span className="badge-optional" style={{ fontSize: '11px', color: '#6b7280', marginLeft: '8px' }}>任意 (後から提出可能)</span>
-                  </label>
-                  <div className="file-drop-area">
-                    <UploadCloud size={32} className="upload-icon" />
-                    <p>クリックしてファイルを選択するか、ドラッグ＆ドロップしてください</p>
-                    <input type="file" className="file-input" onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setAmazonInvoice(e.target.files[0]);
-                      }
-                    }} accept=".pdf,image/*" />
-                    {amazonInvoice && (
-                      <div className="file-name">
-                        <FileText size={16} />
-                        {amazonInvoice.name}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           <div className="form-actions" style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
             <button type="button" className="draft-button" onClick={handleDraftSave} disabled={isSubmitting} style={{ padding: '12px 24px', backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '8px', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>

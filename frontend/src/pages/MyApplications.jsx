@@ -158,7 +158,7 @@ function MyApplications() {
         ) : (
           <div className="cards-wrapper">
             {applications.map(app => (
-              <div key={app.id} className="app-card" onClick={() => navigate(`/applications/${app.id}`)}>
+              <div key={app.id} className="app-card" onClick={() => app.status === 'Draft' ? navigate(`/apply/${app.id}`) : navigate(`/applications/${app.id}`)}>
                 <div className="app-card-header">
                   <span className="app-id">ID: {app.id.substring(0, 8)}</span>
                   <span className="app-date">{new Date(app.createdAt).toLocaleDateString()}</span>

@@ -71,6 +71,14 @@ function App() {
           }
         />
         <Route
+          path="/apply/:id"
+          element={
+            <PrivateRoute>
+              <ExpenseForm />
+            </PrivateRoute>
+          }
+        />
+        <Route
           path="/admin"
           element={
             <AdminRoute>

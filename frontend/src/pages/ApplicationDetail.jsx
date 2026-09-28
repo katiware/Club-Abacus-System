@@ -490,7 +490,7 @@ function ApplicationDetail() {
               {/* User Actions */}
               {app.userId === currentUserId && (app.status === 'Draft' || app.status === 'Remanded' || app.status === 'PendingApproval' || app.status === 'Approved') && (
                 <>
-                  <button className="btn-edit" onClick={openEditModal}>
+                  <button className="btn-edit" onClick={() => app.status === 'Draft' ? navigate(`/apply/${id}`) : openEditModal()}>
                     <Edit2 size={18} />
                     内容を編集する
                   </button>
