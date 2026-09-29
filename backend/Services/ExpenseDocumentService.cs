@@ -96,7 +96,7 @@ public class ExpenseDocumentService(
 
         context.ExpenseDocuments.Add(newDocument);
 
-        if (expenseRequest.Status == ExpenseStatus.Approved && documentType == DocumentType.Receipt)
+        if ((expenseRequest.Status == ExpenseStatus.Approved || expenseRequest.Status == ExpenseStatus.Advance_MoneyHandedOver) && documentType == DocumentType.Receipt)
         {
             expenseRequest.Status = ExpenseStatus.WaitingConfirmation;
             expenseRequest.UpdatedAt = DateTime.UtcNow;

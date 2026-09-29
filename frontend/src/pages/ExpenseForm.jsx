@@ -32,6 +32,7 @@ function ExpenseForm() {
 
   const totalAmount = expenseItems.reduce((sum, item) => sum + (parseInt(item.amount, 10) || 0), 0);
   const isHighAmount = totalAmount >= 50000;
+<<<<<<< Updated upstream
 
   React.useEffect(() => {
     if (id) {
@@ -65,6 +66,10 @@ function ExpenseForm() {
       fetchDraft();
     }
   }, [id]);
+=======
+  const requiresFileUpload = formData.expenseType === 'ADVANCE_PAYMENT';
+  const showFileUpload = formData.expenseType === 'ADVANCE_PAYMENT'; // 事前出金の見積書提出のみ表示。立替払いの領収書は事後提出とする
+>>>>>>> Stashed changes
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;

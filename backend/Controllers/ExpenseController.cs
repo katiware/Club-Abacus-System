@@ -542,11 +542,12 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             return BadRequest("事前承認が完了していないため、このステータスへは進めません。");
         }
 
-        // 金額変動があるが、まだユーザーが実費確定していない場合は進めない
-        if (expenseRequest.IsAmountVariable && !expenseRequest.IsAmountFinalized && 
+        // 事前出金または金額変動がある場合、まだユーザーが実費確定していない場合は進めない
+        bool requiresAmountFinalization = expenseRequest.IsAmountVariable || expenseRequest.Type == ExpenseType.Advance;
+        if (requiresAmountFinalization && !expenseRequest.IsAmountFinalized && 
             (dto.Status == ExpenseStatus.WaitingConfirmation || dto.Status == ExpenseStatus.Settled || dto.Status == ExpenseStatus.UniversitySubmitted))
         {
-            return BadRequest("為替などによる金額変動が設定されている申請ですが、まだ実費金額が確定されていません。ユーザーに金額を修正・確定してもらってください。");
+            return BadRequest("事前出金または金額変動が設定されている申請ですが、まだ実費金額が確定されていません。ユーザーに金額を入力・確定してもらってください。");
         }
 
         // --- ステータス別の詳細バリデーション ---
@@ -593,7 +594,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     }
 
     /// <summary>
-    /// 定期払いなどで為替変動がある申請（IsAmountVariable=true）の実費金額を確定・修正します。
+    /// 定期払いなどで為替変動がある申請（IsAmountVariable=true）、または事前出金の実費金額を確定・修正します。
     /// </summary>
     [HttpPut("{id}/amount")]
     [RequirePermission(PermissionType.ExpenseManageOwn)]
@@ -614,15 +615,27 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             }
         }
 
-        if (!expenseRequest.IsAmountVariable)
+        if (!expenseRequest.IsAmountVariable && expenseRequest.Type != ExpenseType.Advance)
         {
-            return BadRequest("この申請は金額変動が許可されていません（IsAmountVariable=false）。");
+            return BadRequest("この申請は金額変更が許可されていません。");
         }
 
         // 精算済みなど完了済みのものは変更不可とする
         if (expenseRequest.Status == ExpenseStatus.Settled || expenseRequest.Status == ExpenseStatus.UniversitySubmitted)
         {
             return BadRequest("すでに精算や大学提出が完了しているため、金額を変更できません。");
+        }
+
+        if (expenseRequest.TotalAmount != actualAmount)
+        {
+            if (expenseRequest.Type == ExpenseType.Advance || expenseRequest.IsAmountVariable)
+            {
+                var note = $"\n\n[システム追記] 実費確定により、元の金額(¥{expenseRequest.TotalAmount})から¥{actualAmount}に変更されました。";
+                if (expenseRequest.ExpenseItems.Any())
+                {
+                    expenseRequest.ExpenseItems.First().Description += note;
+                }
+            }
         }
 
         expenseRequest.TotalAmount = actualAmount;
