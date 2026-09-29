@@ -23,6 +23,10 @@ public class RecurringExpenseTemplate
     public TemplateStatus TemplateStatus { get; set; } = TemplateStatus.Active; // この定期支払いの状態（有効 / 無効）
 
     [Required]
+    [MaxLength(255)]
+    public string Title { get; set; } = string.Empty; // 生成される申請のタイトル
+
+    [Required]
     public RecurringFrequency RecurringFrequency { get; set; } // 自動生成の頻度（毎月 / 毎年など）
 
     [Required]
@@ -48,6 +52,11 @@ public class RecurringExpenseTemplate
     [Required]
     [MaxLength(100)]
     public string Category { get; set; } = string.Empty; // 使途カテゴリ
+
+    public string? Description { get; set; } // 用途詳細・備考
+
+    [MaxLength(2000)]
+    public string? PurchaseUrl { get; set; } // Web購入時のURL
 
     [Required]
     public DateOnly NextGenerationDate { get; set; } // 次回申請データを生成する基準日（二重生成を防止するためのフラグとしても機能）

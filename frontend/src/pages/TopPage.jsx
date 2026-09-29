@@ -53,18 +53,18 @@ function TopPage() {
       </header>
 
       <main className="top-page-content fade-in">
-        
+
         {/* ダッシュボード領域（アラート・統計） */}
         <section className="dashboard-section">
           <h2>ダッシュボード</h2>
-          
+
           {unfinalizedCount > 0 && (
-            <div className="overdue-alert-banner" style={{backgroundColor: '#fff3cd', color: '#856404', borderColor: '#ffeeba'}}>
+            <div className="overdue-alert-banner" style={{ backgroundColor: '#fff3cd', color: '#856404', borderColor: '#ffeeba' }}>
               <AlertTriangle size={24} />
               <div className="overdue-alert-text">
                 <strong>⚠️ アクションが必要:</strong> 金額の確定が必要な定期払い申請が {unfinalizedCount} 件あります。実際の請求額を入力して確定させてください。
               </div>
-              <button className="overdue-action-btn" style={{backgroundColor: '#ffc107', color: '#212529'}} onClick={() => navigate('/my-applications')}>申請一覧へ</button>
+              <button className="overdue-action-btn" style={{ backgroundColor: '#ffc107', color: '#212529' }} onClick={() => navigate('/my-applications')}>申請一覧へ</button>
             </div>
           )}
 
@@ -99,7 +99,7 @@ function TopPage() {
         {/* ナビゲーションメニュー領域 */}
         <section className="navigation-section">
           <h2>メニュー</h2>
-          
+
           <div className="menu-group">
             <h3 className="group-title">一般機能</h3>
             <div className="menu-grid">

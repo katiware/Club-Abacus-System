@@ -8,6 +8,9 @@ public class RecurringExpenseUpdateDto
     [MaxLength(255)]
     public string? TemplateName { get; set; }
 
+    [MaxLength(255)]
+    public string? Title { get; set; }
+
     public TemplateStatus? TemplateStatus { get; set; }
 
     [MaxLength(255)]
@@ -22,6 +25,11 @@ public class RecurringExpenseUpdateDto
 
     [MaxLength(100)]
     public string? Category { get; set; }
+
+    public string? Description { get; set; }
+
+    [MaxLength(2000)]
+    public string? PurchaseUrl { get; set; }
 
     public DateOnly? NextGenerationDate { get; set; }
 }

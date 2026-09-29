@@ -117,12 +117,18 @@ using (var scope = app.Services.CreateScope())
         var config = services.GetRequiredService<IConfiguration>();
 
         // 1. Roleの初期化
-        string[] roleNames = { "ADMIN", "USER" };
+        string[] roleNames = { "ADMIN", "MANAGER", "USER" };
         foreach (var roleName in roleNames)
         {
             if (!roleManager.RoleExistsAsync(roleName).Result)
             {
-                roleManager.CreateAsync(new Role { Name = roleName, Description = roleName == "ADMIN" ? "管理者" : "一般ユーザー" }).Wait();
+                string description = roleName switch
+                {
+                    "ADMIN" => "管理者",
+                    "MANAGER" => "主将会計",
+                    _ => "一般ユーザー"
+                };
+                roleManager.CreateAsync(new Role { Name = roleName, Description = description }).Wait();
             }
         }
 

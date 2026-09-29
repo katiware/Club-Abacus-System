@@ -26,10 +26,23 @@ const AdminRoute = ({ children }) => {
   const token = localStorage.getItem('authToken');
   // モック: 実際のアプリではJWTのクレームやAPIから取得しますが、ここではlocalStorageを使用
   const userRole = localStorage.getItem('userRole') || 'ADMIN'; // テスト用にデフォルトADMIN
-  
+
+  if (!token) return <Navigate to="/login" replace />;
+  if (userRole !== 'ADMIN' && userRole !== 'MANAGER') {
+    alert('管理者権限が必要です。トップ画面に戻ります。');
+    return <Navigate to="/top" replace />;
+  }
+  return children;
+};
+
+// AdminOnlyRoute for protecting strictly system administrator routes
+const AdminOnlyRoute = ({ children }) => {
+  const token = localStorage.getItem('authToken');
+  const userRole = localStorage.getItem('userRole') || 'ADMIN';
+
   if (!token) return <Navigate to="/login" replace />;
   if (userRole !== 'ADMIN') {
-    alert('管理者権限が必要です。トップ画面に戻ります。');
+    alert('システム管理者権限が必要です。トップ画面に戻ります。');
     return <Navigate to="/top" replace />;
   }
   return children;
@@ -41,101 +54,109 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/top" replace />} />
         <Route path="/login" element={<Login />} />
-        <Route 
-          path="/top" 
+        <Route
+          path="/top"
           element={
             <PrivateRoute>
               <TopPage />
             </PrivateRoute>
-          } 
+          }
         />
-        <Route 
-          path="/apply" 
+        <Route
+          path="/apply"
           element={
             <PrivateRoute>
               <ExpenseForm />
             </PrivateRoute>
-          } 
+          }
         />
-        <Route 
-          path="/admin" 
+        <Route
+          path="/apply/:id"
+          element={
+            <PrivateRoute>
+              <ExpenseForm />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin"
           element={
             <AdminRoute>
               <Admin />
             </AdminRoute>
-          } 
+          }
         />
-        <Route 
-          path="/calculator" 
+        <Route
+          path="/calculator"
           element={
             <PrivateRoute>
               <Calculator />
             </PrivateRoute>
-          } 
+          }
         />
-        <Route 
-          path="/my-applications" 
+        <Route
+          path="/my-applications"
           element={
             <PrivateRoute>
               <MyApplications />
             </PrivateRoute>
-          } 
+          }
         />
-        <Route 
-          path="/all-applications" 
+        <Route
+          path="/all-applications"
           element={
             <AdminRoute>
               <AllApplications />
             </AdminRoute>
-          } 
+          }
         />
-        <Route 
-          path="/admin-settings" 
+        <Route
+          path="/admin-settings"
           element={
-            <AdminRoute>
+            <AdminOnlyRoute>
               <AdminSettings />
-            </AdminRoute>
-          } 
+            </AdminOnlyRoute>
+          }
         />
-        <Route 
-          path="/users" 
+        <Route
+          path="/users"
           element={
-            <AdminRoute>
+            <AdminOnlyRoute>
               <UserManagement />
-            </AdminRoute>
-          } 
+            </AdminOnlyRoute>
+          }
         />
-        <Route 
-          path="/fiscal-years" 
+        <Route
+          path="/fiscal-years"
           element={
             <AdminRoute>
               <FiscalYearSettings />
             </AdminRoute>
-          } 
+          }
         />
-        <Route 
-          path="/applications/:id" 
+        <Route
+          path="/applications/:id"
           element={
             <PrivateRoute>
               <ApplicationDetail />
             </PrivateRoute>
-          } 
+          }
         />
-        <Route 
-          path="/recurring-payments" 
+        <Route
+          path="/recurring-payments"
           element={
             <PrivateRoute>
               <RecurringPayments />
             </PrivateRoute>
-          } 
+          }
         />
-        <Route 
-          path="/profile" 
+        <Route
+          path="/profile"
           element={
             <PrivateRoute>
               <ProfileSettings />
             </PrivateRoute>
-          } 
+          }
         />
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/top" replace />} />

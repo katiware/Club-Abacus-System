@@ -104,12 +104,14 @@ function MyApplications() {
     }
   };
 
-  const getStatusBadge = (status) => {
-    switch (status) {
+  const getStatusBadge = (app) => {
+    switch (app.status) {
       case 'Draft':
         return <span className="status-badge">下書き</span>;
       case 'PendingApproval':
-        return <span className="status-badge pending"><Clock size={14} /> 承認待ち</span>;
+        return app.isEditedAfterApproval
+          ? <span className="status-badge" style={{backgroundColor: '#fef08a', color: '#854d0e', border: '1px solid #fde047'}}><Clock size={14} /> 再承認待(変更あり)</span>
+          : <span className="status-badge pending"><Clock size={14} /> 承認待ち</span>;
       case 'Approved':
       case 'Advance_MoneyHandedOver':
         return <span className="status-badge approved"><CheckCircle size={14} /> 承認済（証憑提出待ち）</span>;
@@ -156,7 +158,7 @@ function MyApplications() {
         ) : (
           <div className="cards-wrapper">
             {applications.map(app => (
-              <div key={app.id} className="app-card" onClick={() => navigate(`/applications/${app.id}`)}>
+              <div key={app.id} className="app-card" onClick={() => app.status === 'Draft' ? navigate(`/apply/${app.id}`) : navigate(`/applications/${app.id}`)}>
                 <div className="app-card-header">
                   <span className="app-id">ID: {app.id.substring(0, 8)}</span>
                   <span className="app-date">{new Date(app.createdAt).toLocaleDateString()}</span>
@@ -174,7 +176,7 @@ function MyApplications() {
                   </span>
                 </div>
                 <div className="app-footer">
-                  {getStatusBadge(app.status)}
+                  {getStatusBadge(app)}
                   {needsUpload(app) && (
                     <button 
                       className="upload-btn"

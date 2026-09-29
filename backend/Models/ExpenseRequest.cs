@@ -38,6 +38,9 @@ public class ExpenseRequest
 
     public string? RejectionReason { get; set; } // 却下・差し戻し時の理由
 
+    public bool IsEditedAfterApproval { get; set; } = false; // 事前承認後、または承認待ち中に内容が編集されたかどうかのフラグ
+    public string? EditReason { get; set; } // 編集時の変更理由
+
     public PeriodAssignmentStatus PeriodAssignmentStatus { get; set; } = PeriodAssignmentStatus.Provisional; // 割当ステータス
 
     public Guid? UniversitySubmissionBatchId { get; set; } // どの提出バッチ（箱）に入っているか

@@ -18,4 +18,5 @@ public class ExpenseUpdateDto
     [Required(ErrorMessage = "最低でも1つの明細が必要です")]
     [MinLength(1, ErrorMessage = "最低でも1つの明細が必要です")]
     public List<ExpenseItemCreateDto> ExpenseItems { get; set; } = new();
+    public string? EditReason { get; set; }
 }

@@ -26,7 +26,7 @@ public class JwtTokenService : IJwtTokenService
             new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(ClaimTypes.Name, user.Name),
             new Claim(ClaimTypes.Email, user.Email ?? ""),
-            new Claim(ClaimTypes.Role, user.Role.Name)
+            new Claim(ClaimTypes.Role, user.Role?.Name ?? "")
         };
 
         // Add permissions based on role
@@ -35,6 +35,24 @@ public class JwtTokenService : IJwtTokenService
             // 管理者はすべての権限を持つ
             var permissions = Enum.GetValues<PermissionType>();
             foreach (var permission in permissions)
+            {
+                claims.Add(new Claim("Permission", permission.ToString()));
+            }
+        }
+        else if (user.Role.Name == "MANAGER")
+        {
+            // 主将会計は会計業務、マスターデータ管理、全体閲覧、自身の申請管理を持つ
+            var managerPermissions = new[]
+            {
+                PermissionType.ExpenseManageOwn,
+                PermissionType.ExpenseReadAll,
+                PermissionType.ExpenseApprove,
+                PermissionType.ExpenseConfirmReceipt,
+                PermissionType.ExpenseSubmitToUniversity,
+                PermissionType.ExpenseSettle,
+                PermissionType.ManageMasterData // 定期支払いや年度・予算の管理に必要
+            };
+            foreach (var permission in managerPermissions)
             {
                 claims.Add(new Claim("Permission", permission.ToString()));
             }

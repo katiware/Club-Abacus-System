@@ -32,6 +32,7 @@ function ApplicationDetail() {
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [editTitle, setEditTitle] = useState('');
+  const [editReason, setEditReason] = useState('');
   const [editItems, setEditItems] = useState([]);
 
   const token = localStorage.getItem('authToken');
@@ -227,6 +228,7 @@ function ApplicationDetail() {
 
   const openEditModal = () => {
     setEditTitle(app.title || '');
+    setEditReason('');
     if (app.expenseItems && app.expenseItems.length > 0) {
       setEditItems(app.expenseItems.map(item => ({
         title: item.itemName || '',
@@ -258,11 +260,17 @@ function ApplicationDetail() {
   };
 
   const handleEditSave = async () => {
+    if ((app.status === 'PendingApproval' || app.status === 'Approved') && !editReason.trim()) {
+      alert('提出済みの申請を編集する場合は、変更理由を入力してください。');
+      return;
+    }
+
     try {
       const payload = {
         title: editTitle,
         type: app.type,
         receiptType: app.receiptType,
+        editReason: editReason.trim() || null,
         expenseItems: editItems.map(item => ({
           itemName: item.title,
           unitPrice: parseInt(item.amount, 10),
@@ -274,7 +282,11 @@ function ApplicationDetail() {
         }))
       };
       await api.put(`/Expense/${id}`, payload);
-      alert('内容を保存しました。（※ まだ承認待ちにはなっていません。「再提出」ボタンを押してください）');
+      if (app.status === 'Draft' || app.status === 'Remanded') {
+        alert('内容を保存しました。（※ まだ承認待ちにはなっていません。「再提出」ボタンを押してください）');
+      } else {
+        alert('内容を保存し、再度承認待ち状態に戻りました。主将会計へ通知されました。');
+      }
       setShowEditModal(false);
       fetchAppDetail();
     } catch (err) {
@@ -283,9 +295,12 @@ function ApplicationDetail() {
     }
   };
 
-  const renderStatusBadge = (status) => {
+  const renderStatusBadge = (status, isEditedAfterApproval) => {
     switch (status) {
-      case 'PendingApproval': return <span className="detail-status status-pending"><Clock size={16}/> 承認待ち</span>;
+      case 'PendingApproval': 
+        return isEditedAfterApproval 
+          ? <span className="detail-status" style={{backgroundColor: '#fef08a', color: '#854d0e', border: '1px solid #fde047'}}><Clock size={16}/> 再承認待 (変更あり)</span>
+          : <span className="detail-status status-pending"><Clock size={16}/> 承認待ち</span>;
       case 'Approved': return <span className="detail-status status-waiting"><CheckCircle size={16}/> 事前承認済</span>;
       case 'Advance_MoneyHandedOver': return <span className="detail-status status-waiting"><CheckCircle size={16}/> 承認済(手渡し済)</span>;
       case 'WaitingConfirmation': return <span className="detail-status status-waiting"><Clock size={16}/> 最終確認待</span>;
@@ -331,7 +346,7 @@ function ApplicationDetail() {
   return (
     <div className="application-detail-container fade-in">
       <PageHeader title={`申請詳細 (${app.id.substring(0,8)})`} backTo={-1}>
-        {renderStatusBadge(app.status)}
+        {renderStatusBadge(app.status, app.isEditedAfterApproval)}
       </PageHeader>
 
       <main className="detail-layout">
@@ -414,6 +429,12 @@ function ApplicationDetail() {
                   <span className="info-value text-red-800">{app.rejectionReason}</span>
                 </div>
               )}
+              {app.isEditedAfterApproval && app.editReason && (
+                <div className="info-item full-width mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <span className="info-label text-yellow-700 font-bold mb-1"><Edit2 size={16} className="inline mr-1" />前回承認・提出後の変更理由（再承認用）</span>
+                  <span className="info-value text-yellow-900">{app.editReason}</span>
+                </div>
+              )}
             </div>
 
             <div className="action-buttons-row mt-6">
@@ -467,16 +488,18 @@ function ApplicationDetail() {
               )}
 
               {/* User Actions */}
-              {app.userId === currentUserId && (app.status === 'Draft' || app.status === 'Remanded') && (
+              {app.userId === currentUserId && (app.status === 'Draft' || app.status === 'Remanded' || app.status === 'PendingApproval' || app.status === 'Approved') && (
                 <>
-                  <button className="btn-edit" onClick={openEditModal}>
+                  <button className="btn-edit" onClick={() => app.status === 'Draft' ? navigate(`/apply/${id}`) : openEditModal()}>
                     <Edit2 size={18} />
                     内容を編集する
                   </button>
-                  <button className="btn-save" onClick={handleResubmit} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Send size={18} />
-                    再提出する (承認待ちへ)
-                  </button>
+                  {(app.status === 'Draft' || app.status === 'Remanded') && (
+                    <button className="btn-save" onClick={handleResubmit} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Send size={18} />
+                      再提出する (承認待ちへ)
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -606,6 +629,19 @@ function ApplicationDetail() {
                 style={{width: '100%', padding: '10px', fontSize: '16px', borderRadius: '4px', border: '1px solid #ccc', boxSizing: 'border-box'}}
               />
             </div>
+
+            {(app.status === 'PendingApproval' || app.status === 'Approved') && (
+              <div className="modal-form-group" style={{marginBottom: '20px', borderBottom: '1px solid #e5e7eb', paddingBottom: '20px', backgroundColor: '#fffbeb', padding: '16px', borderRadius: '8px'}}>
+                <label style={{color: '#b45309'}}>変更理由 <span style={{color: 'red'}}>*必須</span></label>
+                <textarea 
+                  value={editReason} 
+                  onChange={e => setEditReason(e.target.value)} 
+                  placeholder="例: 商品が値上がりしたため金額を修正しました"
+                  rows="2"
+                  style={{width: '100%', padding: '10px', fontSize: '16px', borderRadius: '4px', border: '1px solid #fcd34d', boxSizing: 'border-box'}}
+                />
+              </div>
+            )}
             
             {editItems.map((item, index) => (
               <div key={index} style={{border: '1px solid #e5e7eb', padding: '16px', borderRadius: '8px', marginBottom: '16px', position: 'relative'}}>

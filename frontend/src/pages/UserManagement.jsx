@@ -134,7 +134,7 @@ function UserManagement() {
                   <td className="font-medium">{user.name}</td>
                   <td className="text-gray-500">{user.email}</td>
                   <td>
-                    <button 
+                    <button
                       className={`role-badge ${user.roleName === 'ADMIN' ? 'role-admin' : 'role-member'}`}
                       onClick={() => toggleRole(user)}
                       title="権限を切り替える"
@@ -144,7 +144,7 @@ function UserManagement() {
                     </button>
                   </td>
                   <td>
-                    <button 
+                    <button
                       className={`status-toggle ${user.isActive ? 'status-active' : 'status-inactive'}`}
                       onClick={() => toggleActive(user)}
                     >
@@ -153,8 +153,8 @@ function UserManagement() {
                     </button>
                   </td>
                   <td>
-                    <button 
-                      className="icon-action-btn danger-text" 
+                    <button
+                      className="icon-action-btn danger-text"
                       onClick={() => handleDelete(user.id, user.name)}
                       title="無効化"
                     >
@@ -192,27 +192,27 @@ function UserManagement() {
               )}
               <div className="form-group">
                 <label>氏名</label>
-                <input 
-                  type="text" 
-                  value={newUser.name} 
-                  onChange={e => setNewUser({...newUser, name: e.target.value})} 
-                  required 
+                <input
+                  type="text"
+                  value={newUser.name}
+                  onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                  required
                 />
               </div>
               <div className="form-group">
                 <label>メールアドレス</label>
-                <input 
-                  type="email" 
-                  value={newUser.email} 
-                  onChange={e => setNewUser({...newUser, email: e.target.value})} 
-                  required 
+                <input
+                  type="email"
+                  value={newUser.email}
+                  onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                  required
                 />
               </div>
               <div className="form-group">
                 <label>権限</label>
-                <select 
-                  value={newUser.roleId} 
-                  onChange={e => setNewUser({...newUser, roleId: e.target.value})} 
+                <select
+                  value={newUser.roleId}
+                  onChange={e => setNewUser({ ...newUser, roleId: e.target.value })}
                   required
                 >
                   <option value="">選択してください</option>
