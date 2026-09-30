@@ -23,6 +23,10 @@ function AdminSettings() {
         </button>
       </PageHeader>
 
+      <div style={{ padding: '0 24px', color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
+        ※ システム全体の通知設定や基本設定を管理します。変更後は必ず保存を行ってください。
+      </div>
+
       <main className="settings-grid">
         {/* System Settings Card */}
         <section className="settings-card">

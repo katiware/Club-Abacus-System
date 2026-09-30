@@ -30,10 +30,19 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     [Authorize] // 誰でも見れるが、権限によって内容を変えることも可能
     public async Task<ActionResult<ExpenseSummaryDto>> GetSummary(CancellationToken cancellationToken = default)
     {
-        var pendingCount = await context.ExpenseRequests
+        var userIdString = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
+        Guid.TryParse(userIdString, out var currentUserId);
+        var isAdmin = User.HasClaim("Permission", PermissionType.ExpenseReadAll.ToString());
+
+        var query = context.ExpenseRequests.AsQueryable();
+        if (!isAdmin)
+        {
+            query = query.Where(e => e.UserId == currentUserId);
+        }
+
+        var pendingCount = await query
             .Where(e => e.Status == ExpenseStatus.PendingApproval || e.Status == ExpenseStatus.WaitingConfirmation)
             .CountAsync(cancellationToken);
-
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var currentFiscalYear = await context.FiscalYears
             .FirstOrDefaultAsync(f => f.StartDate <= today && f.EndDate >= today, cancellationToken);
@@ -93,9 +102,8 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         // TODO: 期限切れの計算（事前出金で未精算かつ期日超過のものなど。とりあえず固定値）
         var overdueCount = 0;
 
-        var userIdString = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
         int unfinalizedCount = 0;
-        if (Guid.TryParse(userIdString, out var currentUserId))
+        if (currentUserId != Guid.Empty)
         {
             unfinalizedCount = await context.ExpenseRequests
                 .Where(e => e.UserId == currentUserId && e.IsAmountVariable && !e.IsAmountFinalized 
@@ -432,7 +440,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         // 🚨 セキュリティ対策: 自分の申請は自分で承認・却下できないようにする
         if (expenseRequest.UserId == currentUserId)
         {
-            return Forbid("自分の申請を自分で承認・却下することはできません。");
+            return StatusCode(StatusCodes.Status403Forbidden, "自分の申請を自分で承認・却下することはできません。");
         }
 
         if (dto.Status != ExpenseStatus.Approved && dto.Status != ExpenseStatus.Rejected)
@@ -491,14 +499,14 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (Guid.TryParse(userIdString, out var currentUserId) && expenseRequest.UserId == currentUserId)
         {
-            return Forbid("自分の申請に対する事後処理（確認・精算等）を自分で行うことはできません。");
+            return StatusCode(StatusCodes.Status403Forbidden, "自分の申請に対する事後処理（確認・精算等）を自分で行うことはできません。");
         }
 
         // 必要な権限のチェック
         if (!User.HasClaim("Permission", PermissionType.ExpenseConfirmReceipt.ToString()) &&
             !User.HasClaim("Permission", PermissionType.ExpenseSettle.ToString()))
         {
-            return Forbid("領収書の確認・精算などの操作を行う権限がありません。");
+            return StatusCode(StatusCodes.Status403Forbidden, "領収書の確認・精算などの操作を行う権限がありません。");
         }
 
         // 承認前・却下済みの場合は操作不可

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Shield, ShieldOff, Trash2, Check, X, AlertCircle } from 'lucide-react';
+import { UserPlus, Shield, ShieldOff, Trash2, Check, X, AlertCircle, Edit } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import api from '../services/api';
 import './UserManagement.css';
@@ -16,6 +16,10 @@ function UserManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', roleId: '' });
   const [addError, setAddError] = useState(null);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editUser, setEditUser] = useState(null);
+  const [editError, setEditError] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -39,37 +43,27 @@ function UserManagement() {
     }
   };
 
-  const getNextRole = (currentRoleName) => {
-    // ADMIN <-> MEMBER (SystemAdminなどはそのままか、必要に応じて変更)
-    if (currentRoleName === 'ADMIN') return roles.find(r => r.name === 'MEMBER');
-    return roles.find(r => r.name === 'ADMIN');
+  const openEditModal = (user) => {
+    setEditUser({ ...user });
+    setShowEditModal(true);
+    setEditError(null);
   };
 
-  const toggleRole = async (user) => {
-    const nextRole = getNextRole(user.roleName);
-    if (!nextRole) {
-      alert('変更可能な権限が見つかりません。');
-      return;
-    }
-
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditError(null);
     try {
-      await api.put(`/User/${user.id}`, { roleId: nextRole.id });
-      // 画面更新
-      setUsers(users.map(u => u.id === user.id ? { ...u, roleId: nextRole.id, roleName: nextRole.name } : u));
+      await api.put(`/User/${editUser.id}`, { roleId: editUser.roleId, isActive: editUser.isActive });
+      
+      const role = roles.find(r => r.id === editUser.roleId);
+      setUsers(users.map(u => u.id === editUser.id ? { ...u, roleId: editUser.roleId, roleName: role ? role.name : u.roleName, isActive: editUser.isActive } : u));
+      
+      setShowEditModal(false);
+      setEditUser(null);
+      alert('ユーザー情報を更新しました。');
     } catch (err) {
       console.error(err);
-      alert('権限の変更に失敗しました。');
-    }
-  };
-
-  const toggleActive = async (user) => {
-    const newStatus = !user.isActive;
-    try {
-      await api.put(`/User/${user.id}`, { isActive: newStatus });
-      setUsers(users.map(u => u.id === user.id ? { ...u, isActive: newStatus } : u));
-    } catch (err) {
-      console.error(err);
-      alert('ステータスの変更に失敗しました。');
+      setEditError(err.response?.data?.message || err.response?.data?.[0]?.description || '更新に失敗しました。');
     }
   };
 
@@ -116,6 +110,10 @@ function UserManagement() {
         </button>
       </PageHeader>
 
+      <div style={{ padding: '0 24px', color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
+        ※ 部員の権限変更やアカウントの有効/無効の切り替えを行うことができます。卒業生や退部者のアカウントは適宜無効化してください。
+      </div>
+
       <main className="page-content">
         <div className="table-wrapper">
           <table className="data-table">
@@ -134,32 +132,40 @@ function UserManagement() {
                   <td className="font-medium">{user.name}</td>
                   <td className="text-gray-500">{user.email}</td>
                   <td>
-                    <button 
+                    <span 
                       className={`role-badge ${user.roleName === 'ADMIN' ? 'role-admin' : 'role-member'}`}
-                      onClick={() => toggleRole(user)}
-                      title="権限を切り替える"
+                      style={{ cursor: 'default' }}
                     >
                       {user.roleName === 'ADMIN' ? <Shield size={14} /> : <ShieldOff size={14} />}
                       {user.roleName === 'ADMIN' ? '管理者' : (user.roleName || '未割当')}
-                    </button>
+                    </span>
                   </td>
                   <td>
-                    <button 
+                    <span 
                       className={`status-toggle ${user.isActive ? 'status-active' : 'status-inactive'}`}
-                      onClick={() => toggleActive(user)}
+                      style={{ cursor: 'default' }}
                     >
                       {user.isActive ? <Check size={14} /> : <X size={14} />}
                       {user.isActive ? '有効' : '無効'}
-                    </button>
+                    </span>
                   </td>
                   <td>
-                    <button 
-                      className="icon-action-btn danger-text" 
-                      onClick={() => handleDelete(user.id, user.name)}
-                      title="無効化"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        className="icon-action-btn" 
+                        onClick={() => openEditModal(user)}
+                        title="編集"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button 
+                        className="icon-action-btn danger-text" 
+                        onClick={() => handleDelete(user.id, user.name)}
+                        title="無効化"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -227,6 +233,92 @@ function UserManagement() {
                 </button>
                 <button type="submit" className="primary-btn">
                   追加する
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 編集モーダル */}
+      {showEditModal && editUser && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>部員情報編集</h2>
+              <button className="close-btn" onClick={() => setShowEditModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="modal-body">
+              {editError && (
+                <div className="error-banner">
+                  <AlertCircle size={16} />
+                  {editError}
+                </div>
+              )}
+              <div className="form-group">
+                <label>氏名</label>
+                <input 
+                  type="text" 
+                  value={editUser.name} 
+                  disabled
+                  className="bg-gray-100"
+                  style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>メールアドレス</label>
+                <input 
+                  type="email" 
+                  value={editUser.email} 
+                  disabled
+                  className="bg-gray-100"
+                  style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>権限</label>
+                <select 
+                  value={editUser.roleId || ''} 
+                  onChange={e => setEditUser({...editUser, roleId: e.target.value})} 
+                  required
+                >
+                  <option value="">選択してください</option>
+                  {roles.map(r => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>ステータス</label>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input 
+                      type="radio" 
+                      name="isActive" 
+                      checked={editUser.isActive === true} 
+                      onChange={() => setEditUser({...editUser, isActive: true})} 
+                    />
+                    有効
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input 
+                      type="radio" 
+                      name="isActive" 
+                      checked={editUser.isActive === false} 
+                      onChange={() => setEditUser({...editUser, isActive: false})} 
+                    />
+                    無効
+                  </label>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="secondary-btn" onClick={() => setShowEditModal(false)}>
+                  キャンセル
+                </button>
+                <button type="submit" className="primary-btn">
+                  保存する
                 </button>
               </div>
             </form>

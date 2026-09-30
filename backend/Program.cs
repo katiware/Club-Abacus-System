@@ -22,6 +22,7 @@ builder.Services.AddControllers()
 builder.Services.AddScoped<Club_Abacus_System.Services.IJwtTokenService, Club_Abacus_System.Services.JwtTokenService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IFileStorageService, Club_Abacus_System.Services.LocalFileStorageService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseDocumentService, Club_Abacus_System.Services.ExpenseDocumentService>();
+builder.Services.AddScoped<Club_Abacus_System.Services.IDocumentExportService, Club_Abacus_System.Services.DocumentExportService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IDiscordIntegrationService, Club_Abacus_System.Services.DiscordIntegrationService>();
 builder.Services.AddHostedService<Club_Abacus_System.Services.RecurringExpenseBatchService>();
 
@@ -179,9 +180,20 @@ app.UseExceptionHandler(errorApp =>
 {
     errorApp.Run(async context =>
     {
+        var exceptionHandlerPathFeature = context.Features.Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerPathFeature>();
+        var exception = exceptionHandlerPathFeature?.Error;
+
+        if (exception is DbUpdateConcurrencyException)
+        {
+            context.Response.StatusCode = 409;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsJsonAsync(new { error = "他のユーザーがすでにこのデータを更新しています。画面を更新して最新のデータを確認してください。" });
+            return;
+        }
+
         context.Response.StatusCode = 500;
         context.Response.ContentType = "application/json";
-        await context.Response.WriteAsJsonAsync(new { error = "サーバー内部で予期せぬエラーが発生しました。" });
+        await context.Response.WriteAsJsonAsync(new { error = "サーバー内部で予期せぬエラーが発生しました。", details = exception?.Message, stackTrace = exception?.StackTrace });
     });
 });
 

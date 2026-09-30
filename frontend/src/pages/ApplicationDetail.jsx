@@ -34,9 +34,14 @@ function ApplicationDetail() {
   const [editTitle, setEditTitle] = useState('');
   const [editItems, setEditItems] = useState([]);
 
+  // Admin Review Modal State (事前承認用)
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewAction, setReviewAction] = useState('Approved'); // 'Approved', 'Remanded', 'Rejected'
+  const [reviewReason, setReviewReason] = useState('');
+
   const token = localStorage.getItem('authToken');
   const decodedToken = token ? jwtDecode(token) : null;
-  const currentUserId = decodedToken?.sub;
+  const currentUserId = decodedToken?.sub || decodedToken?.nameid || decodedToken?.['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'];
   const userRole = localStorage.getItem('userRole') || 'MEMBER';
 
   const fetchAppDetail = async () => {
@@ -107,6 +112,26 @@ function ApplicationDetail() {
     } catch (err) {
       console.error('Download error:', err);
       alert('ファイルのダウンロードに失敗しました。');
+    }
+  };
+
+  const handleExportZip = async () => {
+    try {
+      const res = await api.get(`/expenses/${id}/documents/export`, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+      link.setAttribute('download', `証憑まとめ_${id.substring(0,8)}_${dateStr}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('ZIP Export error:', err);
+      alert('ZIPのダウンロードに失敗しました。');
     }
   };
 
@@ -184,15 +209,21 @@ function ApplicationDetail() {
 
     try {
       if (newStatus === 'Rejected') {
-        await api.put(`/Expense/${id}/reject`, { reason: "管理者による却下" });
+        await api.put(`/Expense/${id}/approve`, { status: 'Rejected', rejectionReason: "管理者による却下" });
+      } else if (newStatus === 'Approved') {
+        await api.put(`/Expense/${id}/approve`, { status: 'Approved' });
       } else {
-        await api.put(`/Expense/${id}/approve`, { newStatus });
+        // Advance_MoneyHandedOver, UniversitySubmitted, Settled are confirmed via /confirm endpoint
+        await api.put(`/Expense/${id}/confirm`, { status: newStatus });
       }
       alert('ステータスを更新しました');
       fetchAppDetail();
     } catch (err) {
       console.error(err);
-      const errMsg = err.response?.data?.message || err.response?.data || '処理に失敗しました。';
+      let errMsg = '処理に失敗しました。';
+      if (err.response?.data) {
+        errMsg = err.response.data.error || err.response.data.message || (typeof err.response.data === 'string' ? err.response.data : JSON.stringify(err.response.data));
+      }
       alert(`エラー: ${errMsg}`);
     }
   };
@@ -208,6 +239,30 @@ function ApplicationDetail() {
     } catch (err) {
       console.error(err);
       alert('差し戻し処理に失敗しました。');
+    }
+  };
+
+  const submitReviewAction = async () => {
+    if ((reviewAction === 'Remanded' || reviewAction === 'Rejected') && !reviewReason.trim()) {
+      alert('却下・差し戻しの場合は理由を入力してください。');
+      return;
+    }
+
+    try {
+      if (reviewAction === 'Remanded') {
+        await api.post(`/Expense/${id}/remand`, { reason: reviewReason });
+      } else if (reviewAction === 'Rejected') {
+        await api.put(`/Expense/${id}/approve`, { status: 'Rejected', rejectionReason: reviewReason });
+      } else {
+        await api.put(`/Expense/${id}/approve`, { status: 'Approved' });
+      }
+      alert('審査を完了しました。');
+      setShowReviewModal(false);
+      fetchAppDetail();
+    } catch (err) {
+      console.error(err);
+      const errMsg = err.response?.data?.error || err.response?.data?.message || '処理に失敗しました。';
+      alert(`エラー: ${errMsg}`);
     }
   };
 
@@ -342,6 +397,21 @@ function ApplicationDetail() {
               <span><strong>金額未確定:</strong> 為替レートなどによる金額変動が設定されている申請です。証憑提出時に実際の請求額を入力して金額を確定させてください。</span>
             </div>
           )}
+
+          {/* 追加: 証憑提出の強調メッセージ */}
+          {(app.status === 'Approved' || app.status === 'Advance_MoneyHandedOver') && app.userId === currentUserId && app.receiptType !== 'Paper' && (
+            <div className="warning-banner" style={{backgroundColor: '#d1fae5', color: '#065f46', padding: '16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'flex-start', border: '1px solid #34d399'}}>
+              <CheckCircle size={24} style={{marginRight: '12px', marginTop: '2px', flexShrink: 0}} />
+              <div>
+                <h3 style={{margin: '0 0 8px 0', fontSize: '1.1rem'}}>申請が承認されました！ 🎉</h3>
+                <p style={{margin: 0, fontSize: '0.95rem'}}>
+                  購入を完了し、右側の「証憑の提出・追加」パネルから、実際に購入した際の<strong>領収書</strong>や<strong>請求書</strong>の画像をアップロードしてください。<br/>
+                  提出が完了すると、管理者が確認を行い精算処理に進みます。
+                </p>
+              </div>
+            </div>
+          )}
+
           <section className="detail-card">
             <h2>基本情報</h2>
             <div className="info-grid">
@@ -419,21 +489,11 @@ function ApplicationDetail() {
             <div className="action-buttons-row mt-6">
               {userRole === 'ADMIN' && (
                 <>
-                  {(app.status === 'PendingApproval' || app.status === 'WaitingConfirmation') && (
-                    <>
-                      <button className="btn-approve" onClick={() => handleAction(app.status === 'PendingApproval' ? 'Approved' : 'Settled')}>
-                        <CheckCircle size={18} />
-                        {app.status === 'PendingApproval' ? '事前承認する' : '証憑を確認して精算完了する'}
-                      </button>
-                      <button className="btn-reject" onClick={handleRemand} style={{ backgroundColor: '#f97316', color: 'white' }}>
-                        <AlertCircle size={18} />
-                        差し戻す
-                      </button>
-                      <button className="btn-reject" onClick={() => handleAction('Rejected')}>
-                        <XCircle size={18} />
-                        却下する
-                      </button>
-                    </>
+                  {app.status === 'PendingApproval' && (
+                    <button className="btn-approve" onClick={() => setShowReviewModal(true)} style={{ backgroundColor: '#2563eb', padding: '12px 24px', fontSize: '1.05rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                      <CheckCircle size={20} style={{marginRight: '8px'}} />
+                      購入可否の判定（事前承認）へ進む
+                    </button>
                   )}
 
                   {app.status === 'Approved' && app.type === 'Advance' && (
@@ -451,16 +511,23 @@ function ApplicationDetail() {
                   )}
 
                   {app.status === 'UniversitySubmitted' && (
-                    <button className="btn-approve" onClick={() => handleAction('Settled')}>
-                      <CheckCircle size={18} />
-                      現金を渡し、精算完了する
+                    <button className="btn-approve" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ backgroundColor: '#4f46e5', padding: '12px 24px', width: '100%' }}>
+                      <FileText size={18} />
+                      証憑と最終金額を確認して精算する
                     </button>
                   )}
 
                   {app.status === 'Advance_MoneyHandedOver' && (
-                    <button className="btn-approve" onClick={() => handleAction('Settled')}>
-                      <CheckCircle size={18} />
-                      領収書を確認し、精算完了する
+                    <button className="btn-approve" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ backgroundColor: '#4f46e5', padding: '12px 24px', width: '100%' }}>
+                      <FileText size={18} />
+                      証憑と最終金額を確認して精算する
+                    </button>
+                  )}
+                  
+                  {app.status === 'WaitingConfirmation' && (
+                    <button className="btn-approve" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ backgroundColor: '#4f46e5', padding: '12px 24px', width: '100%' }}>
+                      <FileText size={18} />
+                      証憑と最終金額を確認して精算する
                     </button>
                   )}
                 </>
@@ -485,8 +552,18 @@ function ApplicationDetail() {
 
         <div className="detail-side-col">
           <section className="detail-card receipt-card">
-            <div className="card-header-flex">
+            <div className="card-header-flex" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h2><FileImage size={18} className="inline-icon" /> 証憑書類</h2>
+              {userRole === 'ADMIN' && documents.length > 0 && (
+                <button 
+                  onClick={handleExportZip}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', backgroundColor: '#4f46e5', color: 'white', borderRadius: '4px', fontSize: '0.9rem', border: 'none', cursor: 'pointer', transition: 'background-color 0.2s' }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#4338ca'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#4f46e5'}
+                >
+                  <Download size={16} /> 一括ダウンロード (ZIP)
+                </button>
+              )}
             </div>
 
             {documents.length > 0 ? (
@@ -528,8 +605,8 @@ function ApplicationDetail() {
               </div>
             )}
 
-            {/* 証憑のアップロード・差し替えフォーム (承認済・確認待ちなどの時のみ表示) */}
-            {(app.status === 'Approved' || app.status === 'WaitingConfirmation' || app.status === 'Advance_MoneyHandedOver') && app.receiptType !== 'Paper' && (
+            {/* 証憑のアップロード・差し替えフォーム */}
+            {['Draft', 'Remanded', 'Approved', 'WaitingConfirmation', 'Advance_MoneyHandedOver'].includes(app.status) && app.receiptType !== 'Paper' && app.userId === currentUserId && (
               <div className="receipt-upload-box mt-4">
                 <h3>証憑の提出・追加</h3>
                 {uploadMessage && (
@@ -675,6 +752,68 @@ function ApplicationDetail() {
             <div className="modal-actions">
               <button className="btn-cancel" onClick={() => setShowEditModal(false)}>キャンセル</button>
               <button className="btn-save" onClick={handleEditSave}>保存する</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Admin Review Modal */}
+      {showReviewModal && (
+        <div className="modal-overlay" onClick={() => setShowReviewModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '500px', width: '90%'}}>
+            <h3 style={{ borderBottom: '2px solid #e5e7eb', paddingBottom: '12px', marginBottom: '20px' }}>
+              事前承認の判定
+            </h3>
+            
+            <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f3f4f6', borderRadius: '8px' }}>
+              <div style={{fontWeight: 'bold', marginBottom: '8px'}}>申請内容の最終確認</div>
+              <div style={{display: 'grid', gridTemplateColumns: '100px 1fr', gap: '8px', fontSize: '0.9rem'}}>
+                <span style={{color: '#6b7280'}}>申請者:</span> <span>{applicantName}</span>
+                <span style={{color: '#6b7280'}}>申請金額:</span> <span style={{fontWeight: 'bold', color: '#111827'}}>¥{app.totalAmount.toLocaleString()}</span>
+                <span style={{color: '#6b7280'}}>区分:</span> <span>{typeStr}</span>
+              </div>
+            </div>
+
+            <div className="modal-form-group" style={{ marginBottom: '20px' }}>
+              <label style={{fontWeight: 'bold', display: 'block', marginBottom: '8px'}}>判定結果</label>
+              <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: reviewAction === 'Approved' ? '2px solid #10b981' : '1px solid #d1d5db', borderRadius: '8px', cursor: 'pointer', backgroundColor: reviewAction === 'Approved' ? '#ecfdf5' : 'white' }}>
+                  <input type="radio" name="reviewAction" value="Approved" checked={reviewAction === 'Approved'} onChange={() => setReviewAction('Approved')} style={{ marginRight: '12px' }} />
+                  <span style={{ fontWeight: 'bold', color: '#065f46' }}>承認する (購入を許可)</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: reviewAction === 'Remanded' ? '2px solid #f59e0b' : '1px solid #d1d5db', borderRadius: '8px', cursor: 'pointer', backgroundColor: reviewAction === 'Remanded' ? '#fffbeb' : 'white' }}>
+                  <input type="radio" name="reviewAction" value="Remanded" checked={reviewAction === 'Remanded'} onChange={() => setReviewAction('Remanded')} style={{ marginRight: '12px' }} />
+                  <span style={{ fontWeight: 'bold', color: '#b45309' }}>差し戻す (内容修正を依頼)</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '12px', border: reviewAction === 'Rejected' ? '2px solid #ef4444' : '1px solid #d1d5db', borderRadius: '8px', cursor: 'pointer', backgroundColor: reviewAction === 'Rejected' ? '#fef2f2' : 'white' }}>
+                  <input type="radio" name="reviewAction" value="Rejected" checked={reviewAction === 'Rejected'} onChange={() => setReviewAction('Rejected')} style={{ marginRight: '12px' }} />
+                  <span style={{ fontWeight: 'bold', color: '#991b1b' }}>却下する (購入を許可しない)</span>
+                </label>
+              </div>
+            </div>
+
+            {(reviewAction === 'Remanded' || reviewAction === 'Rejected') && (
+              <div className="modal-form-group" style={{ marginBottom: '20px' }}>
+                <label style={{fontWeight: 'bold', display: 'block', marginBottom: '8px', color: '#ef4444'}}>理由を入力してください (必須)</label>
+                <textarea 
+                  value={reviewReason} 
+                  onChange={e => setReviewReason(e.target.value)} 
+                  rows="3"
+                  placeholder="申請者に通知される理由を記入してください..."
+                  style={{width: '100%', padding: '12px', border: '1px solid #ef4444', borderRadius: '4px'}}
+                  required
+                />
+              </div>
+            )}
+
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px' }}>
+              <button className="btn-cancel" onClick={() => setShowReviewModal(false)} style={{ padding: '10px 20px', borderRadius: '6px', border: '1px solid #d1d5db', backgroundColor: 'white', cursor: 'pointer' }}>キャンセル</button>
+              <button 
+                className="btn-save" 
+                onClick={submitReviewAction}
+                style={{ padding: '10px 24px', borderRadius: '6px', border: 'none', backgroundColor: reviewAction === 'Approved' ? '#10b981' : reviewAction === 'Remanded' ? '#f59e0b' : '#ef4444', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                確定する
+              </button>
             </div>
           </div>
         </div>

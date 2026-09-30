@@ -51,6 +51,9 @@ public class ExpenseRequest
     public string? DiscordThreadId { get; set; } // 議論用DiscordスレッドID
     public string? DiscordThreadUrl { get; set; } // 議論用DiscordスレッドURL
 
+    [ConcurrencyCheck]
+    public Guid Version { get; set; } = Guid.NewGuid(); // 楽観的排他制御用のバージョン（更新のたびに自動で変わる）
+
     // --- Navigation Properties ---
 
     [ForeignKey(nameof(UserId))]

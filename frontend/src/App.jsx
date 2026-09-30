@@ -10,6 +10,7 @@ import AllApplications from './pages/AllApplications';
 import AdminSettings from './pages/AdminSettings';
 import UserManagement from './pages/UserManagement';
 import ApplicationDetail from './pages/ApplicationDetail';
+import ExpenseSettleVerification from './pages/ExpenseSettleVerification';
 import RecurringPayments from './pages/RecurringPayments';
 import ProfileSettings from './pages/ProfileSettings';
 import FiscalYearSettings from './pages/FiscalYearSettings';
@@ -119,6 +120,14 @@ function App() {
             <PrivateRoute>
               <ApplicationDetail />
             </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/admin/verify/:id" 
+          element={
+            <AdminRoute>
+              <ExpenseSettleVerification />
+            </AdminRoute>
           } 
         />
         <Route 

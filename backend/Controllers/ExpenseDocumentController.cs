@@ -127,6 +127,39 @@ public class ExpenseDocumentController(IExpenseDocumentService expenseDocumentSe
     }
 
     /// <summary>
+    /// 証憑ファイル一式をZIP形式でダウンロードします。
+    /// </summary>
+    [HttpGet("export")]
+    [RequirePermission(PermissionType.ExpenseManageOwn)]
+    public async Task<IActionResult> ExportDocumentsToZip(Guid requestId, [FromServices] IDocumentExportService exportService)
+    {
+        var currentUserId = GetCurrentUserId();
+        if (currentUserId == null)
+        {
+            return Unauthorized("ユーザー情報が取得できません。");
+        }
+
+        var hasAdminAccess = HasAdminAccess();
+
+        try
+        {
+            var zipStream = await exportService.ExportDocumentsToZipAsync(requestId, currentUserId.Value, hasAdminAccess);
+            var fileName = $"証憑まとめ_{requestId}_{DateTime.Now:yyyyMMddHHmmss}.zip";
+            
+            // File() でストリームを返すことで、ブラウザにダウンロードさせる
+            return File(zipStream, "application/zip", fileName);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Forbid(ex.Message);
+        }
+    }
+
+    /// <summary>
     /// 証憑ファイルを論理削除します。
     /// </summary>
     [HttpDelete("{documentId}")]
