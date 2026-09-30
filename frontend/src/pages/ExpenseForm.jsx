@@ -312,21 +312,17 @@ function ExpenseForm() {
                 </div>
               </div>
 
-              {(formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') && (
-                <>
-                  <div className="form-group" style={{ marginBottom: '8px' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', fontWeight: 'normal', cursor: 'pointer', color: '#4b5563' }}>
-                      <input type="checkbox" name="isProductUndecided" checked={item.isProductUndecided || false} onChange={(e) => handleItemChange(index, e)} style={{ marginRight: '8px', width: '16px', height: '16px' }} />
-                      具体的な商品は未定（Discordで相談する）
-                    </label>
-                  </div>
-                  {!item.isProductUndecided && (
-                    <div className="form-group">
-                      <label>購入元URL <span className="badge-required">必須</span></label>
-                      <input type="url" name="purchaseUrl" value={item.purchaseUrl} onChange={(e) => handleItemChange(index, e)} placeholder="https://www.amazon.co.jp/..." required className="input-field" />
-                    </div>
-                  )}
-                </>
+              <div className="form-group" style={{ marginBottom: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', fontWeight: 'normal', cursor: 'pointer', color: '#4b5563' }}>
+                  <input type="checkbox" name="isProductUndecided" checked={item.isProductUndecided || false} onChange={(e) => handleItemChange(index, e)} style={{ marginRight: '8px', width: '16px', height: '16px' }} />
+                  具体的な商品は未定（Discordで相談する）
+                </label>
+              </div>
+              {(formData.purchaseMethod === 'WEB' || formData.purchaseMethod === 'AMAZON') && !item.isProductUndecided && (
+                <div className="form-group">
+                  <label>購入元URL <span className="badge-required">必須</span></label>
+                  <input type="url" name="purchaseUrl" value={item.purchaseUrl} onChange={(e) => handleItemChange(index, e)} placeholder="https://www.amazon.co.jp/..." required className="input-field" />
+                </div>
               )}
 
               <div className="form-group">

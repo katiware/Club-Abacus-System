@@ -98,6 +98,13 @@ public class AppDbContext(
                 {
                     updatedAtProperty.SetValue(entry.Entity, DateTime.UtcNow);
                 }
+
+                // 排他制御用のバージョン更新
+                var versionProperty = entry.Entity.GetType().GetProperty("Version");
+                if (versionProperty != null && versionProperty.PropertyType == typeof(Guid) && versionProperty.CanWrite)
+                {
+                    versionProperty.SetValue(entry.Entity, Guid.NewGuid());
+                }
             }
 
             if (entry.State == EntityState.Deleted)

@@ -3,6 +3,7 @@ using System;
 using Club_Abacus_System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Club_Abacus_System.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260924063845_AddConcurrencyControl")]
+    partial class AddConcurrencyControl
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -180,16 +183,10 @@ namespace Club_Abacus_System.Migrations
                     b.Property<string>("DiscordThreadUrl")
                         .HasColumnType("text");
 
-                    b.Property<string>("EditReason")
-                        .HasColumnType("text");
-
                     b.Property<bool>("IsAmountFinalized")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsAmountVariable")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsEditedAfterApproval")
                         .HasColumnType("boolean");
 
                     b.Property<int>("PeriodAssignmentStatus")
@@ -298,9 +295,6 @@ namespace Club_Abacus_System.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("Description")
-                        .HasColumnType("text");
-
                     b.Property<int>("ExpenseType")
                         .HasColumnType("integer");
 
@@ -319,10 +313,6 @@ namespace Club_Abacus_System.Migrations
                         .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)");
-
-                    b.Property<string>("PurchaseUrl")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
 
                     b.Property<int>("ReceiptType")
                         .HasColumnType("integer");
