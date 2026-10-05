@@ -75,6 +75,11 @@ public class AuthController(
 
             if (user == null) return Unauthorized(new { Message = "このメールアドレスはシステムに登録されていません。" });
             if (!user.IsActive) return Forbid("アカウントが無効化されています。");
+            
+            if (!IsValidDomainAndMember(email))
+            {
+                return BadRequest(new { Message = "指定されたドメインのメールアドレスではありません（@hiro.kindai.ac.jpのみ許可されています）。" });
+            }
 
             var jwtToken = jwtTokenService.GenerateJwtToken(user);
 
@@ -191,6 +196,12 @@ public class AuthController(
             if (!user.IsActive)
             {
                 return Redirect($"{frontendUrl}?error=account_disabled");
+            }
+
+            if (!IsValidDomainAndMember(email))
+            {
+                logger.LogWarning("Login blocked. Domain mismatch for existing user {Email}", email);
+                return Redirect($"{frontendUrl}?error=invalid_domain");
             }
 
             var jwtToken = jwtTokenService.GenerateJwtToken(user);

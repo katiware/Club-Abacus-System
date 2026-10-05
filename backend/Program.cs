@@ -23,15 +23,37 @@ builder.Services.AddScoped<Club_Abacus_System.Services.IJwtTokenService, Club_Ab
 builder.Services.AddScoped<Club_Abacus_System.Services.IFileStorageService, Club_Abacus_System.Services.LocalFileStorageService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IExpenseDocumentService, Club_Abacus_System.Services.ExpenseDocumentService>();
 builder.Services.AddScoped<Club_Abacus_System.Services.IDocumentExportService, Club_Abacus_System.Services.DocumentExportService>();
-builder.Services.AddScoped<Club_Abacus_System.Services.IDiscordIntegrationService, Club_Abacus_System.Services.DiscordIntegrationService>();
+builder.Services.AddHttpClient<Club_Abacus_System.Services.IDiscordIntegrationService, Club_Abacus_System.Services.DiscordIntegrationService>();
 builder.Services.AddHostedService<Club_Abacus_System.Services.RecurringExpenseBatchService>();
+builder.Services.AddHostedService<Club_Abacus_System.Services.UserDeactivationService>();
 
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(sp => 
 {
     // 依存性の注入(IHttpClientFactory)を使わずに直接HttpClientを生成します。
     // これにより、Aspireのデフォルトのタイムアウト（約10秒）を回避し、
     // IPv6の接続に失敗した場合でもOSがIPv4にフォールバックする時間（約21秒）を確保できます。
-    var handler = new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(2) };
+    var handler = new SocketsHttpHandler 
+    { 
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        ConnectCallback = async (context, cancellationToken) =>
+        {
+            // IPv4を強制する
+            var entry = await System.Net.Dns.GetHostEntryAsync(context.DnsEndPoint.Host, System.Net.Sockets.AddressFamily.InterNetwork, cancellationToken);
+            var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Stream, System.Net.Sockets.ProtocolType.Tcp);
+            socket.NoDelay = true;
+
+            try
+            {
+                await socket.ConnectAsync(entry.AddressList, context.DnsEndPoint.Port, cancellationToken);
+                return new System.Net.Sockets.NetworkStream(socket, ownsSocket: true);
+            }
+            catch
+            {
+                socket.Dispose();
+                throw;
+            }
+        }
+    };
     var httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
     
     return new ConfigurationManager<OpenIdConnectConfiguration>(

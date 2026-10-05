@@ -39,6 +39,8 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
                 RoleId = u.RoleId,
                 RoleName = u.Role != null ? u.Role.Name : null,
                 DiscordId = u.DiscordId,
+                StudentId = u.StudentId,
+                EnrollmentYear = u.EnrollmentYear,
                 IsActive = u.IsActive,
                 CreatedAt = u.CreatedAt
             })
@@ -72,6 +74,8 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
             RoleId = user.RoleId,
             RoleName = user.Role?.Name,
             DiscordId = user.DiscordId,
+            StudentId = user.StudentId,
+            EnrollmentYear = user.EnrollmentYear,
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt
         });
@@ -125,6 +129,8 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
             RoleId = user.RoleId,
             RoleName = user.Role?.Name,
             DiscordId = user.DiscordId,
+            StudentId = user.StudentId,
+            EnrollmentYear = user.EnrollmentYear,
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt
         };
@@ -151,6 +157,8 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
             UserName = dto.Email, // Identityの仕様でUserNameは必須
             Email = dto.Email,
             Name = dto.Name,
+            StudentId = dto.StudentId,
+            EnrollmentYear = dto.EnrollmentYear,
             RoleId = dto.RoleId,
             DiscordId = dto.DiscordId,
             IsActive = true,
@@ -175,6 +183,8 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
             RoleId = user.RoleId,
             RoleName = role?.Name,
             DiscordId = user.DiscordId,
+            StudentId = user.StudentId,
+            EnrollmentYear = user.EnrollmentYear,
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt
         };
@@ -198,6 +208,8 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
 
         if (dto.Name != null) user.Name = dto.Name;
         if (dto.DiscordId != null) user.DiscordId = dto.DiscordId;
+        if (dto.StudentId != null) user.StudentId = dto.StudentId;
+        if (dto.EnrollmentYear.HasValue) user.EnrollmentYear = dto.EnrollmentYear.Value;
         if (dto.IsActive.HasValue) user.IsActive = dto.IsActive.Value;
 
         if (dto.RoleId.HasValue)
@@ -250,5 +262,111 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
         await userManager.UpdateAsync(user);
 
         return NoContent();
+    }
+
+    /// <summary>
+    /// Excelファイルから部員を一括登録します。
+    /// </summary>
+    [HttpPost("import")]
+    [RequirePermission(PermissionType.ManageUsers)]
+    public async Task<IActionResult> ImportUsers(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest("ファイルが選択されていません。");
+        }
+
+        if (!file.FileName.EndsWith(".xlsx"))
+        {
+            return BadRequest("Excelファイル(.xlsx)をアップロードしてください。");
+        }
+
+        var userRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "USER");
+        if (userRole == null) return StatusCode(500, "システムにUSERロールが存在しません。");
+
+        var importedUsers = new List<User>();
+        var errors = new List<string>();
+        int rowNumber = 2; // ヘッダーをスキップ
+
+        try
+        {
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream);
+            
+            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+            var worksheet = workbook.Worksheet(1); // 最初のシート
+            
+            var rows = worksheet.RangeUsed()?.RowsUsed()?.Skip(1); // ヘッダー行をスキップ
+            if (rows == null) return BadRequest("データが見つかりません。");
+
+            foreach (var row in rows)
+            {
+                var studentId = row.Cell(1).GetString().Trim();
+                var name = row.Cell(2).GetString().Trim();
+                var email = row.Cell(3).GetString().Trim();
+                var enrollmentYearStr = row.Cell(4).GetString().Trim();
+
+                if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(name))
+                {
+                    errors.Add($"{rowNumber}行目: 氏名またはメールアドレスが空です。");
+                    rowNumber++;
+                    continue;
+                }
+
+                if (!email.EndsWith("@hiro.kindai.ac.jp"))
+                {
+                    errors.Add($"{rowNumber}行目: ドメインが @hiro.kindai.ac.jp ではありません ({email})。");
+                    rowNumber++;
+                    continue;
+                }
+
+                int? enrollmentYear = null;
+                if (int.TryParse(enrollmentYearStr, out int year))
+                {
+                    enrollmentYear = year;
+                }
+
+                var existingUser = await userManager.FindByEmailAsync(email);
+                if (existingUser != null)
+                {
+                    errors.Add($"{rowNumber}行目: メールアドレス {email} は既に登録されています。");
+                }
+                else
+                {
+                    var newUser = new User
+                    {
+                        UserName = email,
+                        Email = email,
+                        Name = name,
+                        StudentId = studentId,
+                        EnrollmentYear = enrollmentYear,
+                        RoleId = userRole.Id,
+                        IsActive = true
+                    };
+
+                    var result = await userManager.CreateAsync(newUser);
+                    if (result.Succeeded)
+                    {
+                        await userManager.AddToRoleAsync(newUser, "USER");
+                        importedUsers.Add(newUser);
+                    }
+                    else
+                    {
+                        errors.Add($"{rowNumber}行目: 登録に失敗しました。{string.Join(", ", result.Errors.Select(e => e.Description))}");
+                    }
+                }
+                rowNumber++;
+            }
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"ファイルの読み込み中にエラーが発生しました: {ex.Message}");
+        }
+
+        return Ok(new
+        {
+            Message = $"{importedUsers.Count} 人のユーザーをインポートしました。",
+            Errors = errors
+        });
     }
 }

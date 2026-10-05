@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Shield, ShieldOff, Trash2, Check, X, AlertCircle, Edit } from 'lucide-react';
+import { UserPlus, Shield, ShieldOff, Trash2, Check, X, AlertCircle, Edit, Upload } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import api from '../services/api';
 import './UserManagement.css';
@@ -98,16 +98,54 @@ function UserManagement() {
     }
   };
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm(`${file.name} をアップロードして一括登録を実行しますか？\n(※A列:学籍番号, B列:氏名, C列:メールアドレス, D列:入学年度)`)) {
+      e.target.value = null;
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      setIsLoading(true);
+      const response = await api.post('/User/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert(response.data.message);
+      if (response.data.errors && response.data.errors.length > 0) {
+        alert('一部の行でエラーがありました。詳細はコンソールまたはログをご確認ください。\n' + response.data.errors.slice(0, 5).join('\n') + (response.data.errors.length > 5 ? '\n...' : ''));
+      }
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || err.response?.data || 'ファイルのアップロードに失敗しました。');
+    } finally {
+      setIsLoading(false);
+      e.target.value = null;
+    }
+  };
+
   if (isLoading) return <div className="p-8 text-center">読み込み中...</div>;
   if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
   return (
     <div className="user-management-container fade-in">
       <PageHeader title="部員管理" backTo="/top">
-        <button className="primary-btn" onClick={() => setShowAddModal(true)}>
-          <UserPlus size={18} />
-          新規部員追加
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <label className="secondary-btn" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>
+            <Upload size={18} />
+            一括追加 (Excel)
+            <input type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleFileUpload} />
+          </label>
+          <button className="primary-btn" onClick={() => setShowAddModal(true)}>
+            <UserPlus size={18} />
+            新規部員追加
+          </button>
+        </div>
       </PageHeader>
 
       <div style={{ padding: '0 24px', color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
