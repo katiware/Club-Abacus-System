@@ -5,11 +5,9 @@ namespace Club_Abacus_System.DTOs.RecurringExpenses;
 
 public class RecurringExpenseUpdateDto
 {
-    [MaxLength(255)]
-    public string? TemplateName { get; set; }
 
     [MaxLength(255)]
-    public string? Title { get; set; }
+    public string? TemplateName { get; set; }
 
     public TemplateStatus? TemplateStatus { get; set; }
 

@@ -32,44 +32,8 @@ function ExpenseForm() {
 
   const totalAmount = expenseItems.reduce((sum, item) => sum + (parseInt(item.amount, 10) || 0), 0);
   const isHighAmount = totalAmount >= 50000;
-<<<<<<< Updated upstream
-
-  React.useEffect(() => {
-    if (id) {
-      const fetchDraft = async () => {
-        try {
-          const res = await api.get(`/Expense/${id}`);
-          const data = res.data;
-          setFormData({
-            title: data.title || '',
-            expenseType: data.type === 'Advance' ? 'ADVANCE_PAYMENT' : 'PAY_OUT_OF_POCKET',
-            purchaseMethod: data.receiptType === 'Paper' ? 'STORE' : (data.receiptType === 'Amazon' ? 'AMAZON' : 'WEB')
-          });
-          if (data.expenseItems && data.expenseItems.length > 0) {
-            setExpenseItems(data.expenseItems.map(item => ({
-              title: item.itemName || '',
-              amount: item.unitPrice || '',
-              category: item.category || '',
-              purchaseUrl: item.purchaseUrl || '',
-              details: item.description || '',
-              remarks: '',
-              isProductUndecided: item.isProductUndecided || false
-            })));
-          }
-        } catch (err) {
-          console.error(err);
-          setError('下書きデータの取得に失敗しました。');
-        } finally {
-          setIsLoadingDraft(false);
-        }
-      };
-      fetchDraft();
-    }
-  }, [id]);
-=======
   const requiresFileUpload = formData.expenseType === 'ADVANCE_PAYMENT';
   const showFileUpload = formData.expenseType === 'ADVANCE_PAYMENT'; // 事前出金の見積書提出のみ表示。立替払いの領収書は事後提出とする
->>>>>>> Stashed changes
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -306,6 +270,7 @@ function ExpenseForm() {
               <option value="7">7日ごと (デフォルト)</option>
               <option value="14">14日ごと</option>
             </select>
+
           </div>
 
           <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />

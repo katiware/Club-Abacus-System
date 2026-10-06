@@ -36,45 +36,7 @@ function Admin() {
     fetchApplications();
   }, []);
 
-  const handleAction = async (id, currentStatus) => {
-    try {
-      if (currentStatus === 'PendingApproval') {
-        await api.put(`/Expense/${id}/approve`, { status: 'Approved' });
-        alert(`申請を承認しました。`);
-      } else if (currentStatus === 'Approved') {
-        const nextStatus = appType === 'Advance' ? 'Advance_MoneyHandedOver' : 'UniversitySubmitted';
-        await api.put(`/Expense/${id}/confirm`, { status: nextStatus });
-        alert(`状態を更新しました。`);
-      } else if (currentStatus === 'UniversitySubmitted' || currentStatus === 'Advance_MoneyHandedOver' || currentStatus === 'WaitingConfirmation') {
-        await api.put(`/Expense/${id}/confirm`, { status: 'Settled' });
-        alert(`精算を完了しました。`);
-      }
-      // 再フェッチ
-      await fetchApplications();
-    } catch (err) {
-      console.error(err);
-      const errMsg = err.response?.data?.message || err.response?.data || '処理に失敗しました。';
-      alert(`エラー: ${errMsg}`);
-    }
-  };
 
-  const handleReject = async (id) => {
-    const comment = prompt("差し戻しの理由（コメント）を入力してください:");
-    if (comment !== null) {
-      try {
-        await api.put(`/Expense/${id}/approve`, { 
-          status: 'Rejected', 
-          rejectionReason: comment 
-        });
-        alert(`申請を差し戻しました。`);
-        await fetchApplications();
-      } catch (err) {
-        console.error(err);
-        const errMsg = err.response?.data?.message || err.response?.data || '差し戻しに失敗しました。';
-        alert(`エラー: ${errMsg}`);
-      }
-    }
-  };
 
   const renderStatus = (status) => {
     switch (status) {
@@ -87,12 +49,7 @@ function Admin() {
     }
   };
 
-  const getActionBtnLabel = (status, type) => {
-    if (status === 'PendingApproval') return '承認';
-    if (status === 'Approved') return type === 'Advance' ? '手渡し' : '大学提出';
-    if (status === 'UniversitySubmitted' || status === 'Advance_MoneyHandedOver' || status === 'WaitingConfirmation') return '精算完了';
-    return '完了';
-  };
+
 
   const getTypeStr = (type) => type === 'Reimbursement' ? '立替払い' : '事前出金';
   const getTitle = (app) => app.expenseItems && app.expenseItems.length > 0 ? app.expenseItems[0].itemName : '品目なし';
@@ -142,28 +99,11 @@ function Admin() {
                         className="action-btn view-btn" 
                         title="詳細を見る"
                         onClick={() => navigate(`/applications/${app.id}`)}
+                        style={{ width: '100%', justifyContent: 'center' }}
                       >
                         <FileText size={16} />
-                        詳細
+                        詳細を見る・処理する
                       </button>
-                      <button 
-                        className="action-btn approve-btn" 
-                        title="次のステップへ"
-                        onClick={() => handleAction(app.id, app.status, app.type)}
-                      >
-                        <CheckCircle size={16} />
-                        {getActionBtnLabel(app.status, app.type)}
-                      </button>
-                      {app.status === 'PendingApproval' && (
-                        <button 
-                          className="action-btn reject-btn" 
-                          title="差し戻す"
-                          onClick={() => handleReject(app.id)}
-                        >
-                          <XCircle size={16} />
-                          差戻
-                        </button>
-                      )}
                     </td>
                   </tr>
                 ))}

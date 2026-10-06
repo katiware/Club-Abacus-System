@@ -133,27 +133,31 @@ using (var scope = app.Services.CreateScope())
         }
 
         // 2. 初期管理者の登録
-        var adminEmail = config["AdminSettings:InitialAdminEmail"];
-        if (!string.IsNullOrEmpty(adminEmail))
+        var adminEmails = config["AdminSettings:InitialAdminEmail"];
+        if (!string.IsNullOrEmpty(adminEmails))
         {
-            var existingAdmin = userManager.FindByEmailAsync(adminEmail).Result;
-            if (existingAdmin == null)
+            var emails = adminEmails.Split(',').Select(e => e.Trim()).Where(e => !string.IsNullOrEmpty(e));
+            foreach (var email in emails)
             {
-                var adminRole = roleManager.FindByNameAsync("ADMIN").Result;
-                var adminUser = new User
+                var existingAdmin = userManager.FindByEmailAsync(email).Result;
+                if (existingAdmin == null)
                 {
-                    UserName = adminEmail,
-                    Email = adminEmail,
-                    Name = "初期管理者",
-                    RoleId = adminRole!.Id,
-                    IsActive = true
-                };
-                
-                var result = userManager.CreateAsync(adminUser).Result;
-                if (result.Succeeded)
-                {
-                    // Add to Role just in case (though we use RoleId in User model directly as well)
-                    userManager.AddToRoleAsync(adminUser, "ADMIN").Wait();
+                    var adminRole = roleManager.FindByNameAsync("ADMIN").Result;
+                    var adminUser = new User
+                    {
+                        UserName = email,
+                        Email = email,
+                        Name = "初期管理者",
+                        RoleId = adminRole!.Id,
+                        IsActive = true
+                    };
+                    
+                    var result = userManager.CreateAsync(adminUser).Result;
+                    if (result.Succeeded)
+                    {
+                        // Add to Role just in case (though we use RoleId in User model directly as well)
+                        userManager.AddToRoleAsync(adminUser, "ADMIN").Wait();
+                    }
                 }
             }
         }
@@ -162,6 +166,7 @@ using (var scope = app.Services.CreateScope())
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "データベースの初期化中にエラーが発生しました。");
+        System.IO.File.WriteAllText("migration_error.txt", ex.ToString());
     }
 }
 

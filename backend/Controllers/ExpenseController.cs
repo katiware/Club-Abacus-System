@@ -204,7 +204,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         {
             if (expenseRequest.UserId != currentUserId && !User.HasClaim("Permission", PermissionType.ExpenseApprove.ToString()))
             {
-                return Forbid("他人の申請を閲覧する権限がありません。");
+                return StatusCode(403, "他人の申請を閲覧する権限がありません。");
             }
         }
 
@@ -275,7 +275,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         // 🚨 セキュリティ対策: 偽造可能なuserId変数ではなく、本人のID(currentUserId)と比較する
         if (expenseRequest.UserId != currentUserId)
         {
-            return Forbid("他人の申請を操作することはできません。");
+            return StatusCode(403, "他人の申請を操作することはできません。");
         }
 
         // 下書き、または差し戻し状態の場合のみ提出可能
@@ -365,7 +365,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         if (expenseRequest.UserId != currentUserId)
         {
-            return Forbid("他人の申請を操作することはできません。");
+            return StatusCode(403, "他人の申請を操作することはできません。");
         }
 
         if (expenseRequest.Status != ExpenseStatus.Draft && 
@@ -464,7 +464,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         // 🚨 セキュリティ対策: 自分の申請は自分で承認・却下できないようにする
         if (expenseRequest.UserId == currentUserId)
         {
-            return Forbid("自分の申請を自分で承認・却下することはできません。");
+            return StatusCode(403, "自分の申請を自分で承認・却下することはできません。");
         }
 
         if (dto.Status != ExpenseStatus.Approved && dto.Status != ExpenseStatus.Rejected)
@@ -524,14 +524,14 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (Guid.TryParse(userIdString, out var currentUserId) && expenseRequest.UserId == currentUserId)
         {
-            return Forbid("自分の申請に対する事後処理（確認・精算等）を自分で行うことはできません。");
+            return StatusCode(403, "自分の申請に対する事後処理（確認・精算等）を自分で行うことはできません。");
         }
 
         // 必要な権限のチェック
         if (!User.HasClaim("Permission", PermissionType.ExpenseConfirmReceipt.ToString()) &&
             !User.HasClaim("Permission", PermissionType.ExpenseSettle.ToString()))
         {
-            return Forbid("領収書の確認・精算などの操作を行う権限がありません。");
+            return StatusCode(403, "領収書の確認・精算などの操作を行う権限がありません。");
         }
 
         // 承認前・却下済みの場合は操作不可
@@ -611,7 +611,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         {
             if (expenseRequest.UserId != currentUserId && !User.HasClaim("Permission", PermissionType.ExpenseApprove.ToString()))
             {
-                return Forbid("他人の申請の金額を変更することはできません。");
+                return StatusCode(403, "他人の申請の金額を変更することはできません。");
             }
         }
 

@@ -206,9 +206,11 @@ function ApplicationDetail() {
 
     try {
       if (newStatus === 'Rejected') {
-        await api.put(`/Expense/${id}/reject`, { reason: "管理者による却下" });
+        const reason = window.prompt('却下理由を入力してください（任意）:');
+        if (reason === null) return; // Cancelled
+        await api.put(`/Expense/${id}/approve`, { status: newStatus, rejectionReason: reason || "管理者による却下" });
       } else {
-        await api.put(`/Expense/${id}/approve`, { newStatus });
+        await api.put(`/Expense/${id}/approve`, { status: newStatus });
       }
       alert('ステータスを更新しました');
       fetchAppDetail();

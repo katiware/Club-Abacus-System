@@ -8,13 +8,10 @@ public class RecurringExpenseCreateDto
     [Required]
     public Guid UserId { get; set; }
 
-    [Required]
-    [MaxLength(255)]
-    public string TemplateName { get; set; } = string.Empty;
 
     [Required]
     [MaxLength(255)]
-    public string Title { get; set; } = string.Empty;
+    public string TemplateName { get; set; } = string.Empty;
 
     [Required]
     public RecurringFrequency RecurringFrequency { get; set; }
