@@ -51,8 +51,23 @@ public class AuthController(
         }
     }
 
-    private bool IsValidDomainAndMember(string email)
+    private bool IsValidDomainAndMember(string email, User? existingUser = null)
     {
+        if (existingUser != null && existingUser.Role?.Name == "ADMIN")
+        {
+            return true;
+        }
+
+        var adminEmailsConfig = configuration["AdminSettings:InitialAdminEmail"];
+        if (!string.IsNullOrEmpty(adminEmailsConfig))
+        {
+            var adminEmails = adminEmailsConfig.Split(',').Select(e => e.Trim());
+            if (adminEmails.Contains(email, StringComparer.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
         return email.EndsWith("@hiro.kindai.ac.jp");
     }
 
@@ -75,6 +90,11 @@ public class AuthController(
 
             if (user == null) return Unauthorized(new { Message = "このメールアドレスはシステムに登録されていません。" });
             if (!user.IsActive) return Forbid("アカウントが無効化されています。");
+            
+            if (!IsValidDomainAndMember(email, user))
+            {
+                return BadRequest(new { Message = "指定されたドメインのメールアドレスではありません（@hiro.kindai.ac.jpのみ許可されています）。" });
+            }
 
             var jwtToken = jwtTokenService.GenerateJwtToken(user);
 
@@ -191,6 +211,12 @@ public class AuthController(
             if (!user.IsActive)
             {
                 return Redirect($"{frontendUrl}?error=account_disabled");
+            }
+
+            if (!IsValidDomainAndMember(email, user))
+            {
+                logger.LogWarning("Login blocked. Domain mismatch for existing user {Email}", email);
+                return Redirect($"{frontendUrl}?error=invalid_domain");
             }
 
             var jwtToken = jwtTokenService.GenerateJwtToken(user);

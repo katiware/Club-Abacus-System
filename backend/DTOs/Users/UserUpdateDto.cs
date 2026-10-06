@@ -9,6 +9,11 @@ public class UserUpdateDto
 
     public Guid? RoleId { get; set; }
 
+    [MaxLength(20)]
+    public string? StudentId { get; set; }
+
+    public int? EnrollmentYear { get; set; }
+
     [MaxLength(100)]
     public string? DiscordId { get; set; }
 

@@ -14,6 +14,11 @@ public class UserCreateDto
 
     public Guid RoleId { get; set; }
 
+    [MaxLength(20)]
+    public string StudentId { get; set; } = string.Empty;
+
+    public int? EnrollmentYear { get; set; }
+
     [MaxLength(100)]
     public string DiscordId { get; set; } = string.Empty;
 }

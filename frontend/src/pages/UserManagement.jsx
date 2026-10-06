@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Shield, ShieldOff, Trash2, Check, X, AlertCircle } from 'lucide-react';
+import { UserPlus, Shield, ShieldOff, Trash2, Check, X, AlertCircle, Edit, Upload } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import api from '../services/api';
 import './UserManagement.css';
@@ -16,6 +16,10 @@ function UserManagement() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', roleId: '' });
   const [addError, setAddError] = useState(null);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editUser, setEditUser] = useState(null);
+  const [editError, setEditError] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -39,37 +43,54 @@ function UserManagement() {
     }
   };
 
-  const getNextRole = (currentRoleName) => {
-    // ADMIN <-> MEMBER (SystemAdminなどはそのままか、必要に応じて変更)
-    if (currentRoleName === 'ADMIN') return roles.find(r => r.name === 'MEMBER');
-    return roles.find(r => r.name === 'ADMIN');
+  const openEditModal = (user) => {
+    setEditUser({ ...user });
+    setShowEditModal(true);
+    setEditError(null);
   };
 
-  const toggleRole = async (user) => {
-    const nextRole = getNextRole(user.roleName);
-    if (!nextRole) {
-      alert('変更可能な権限が見つかりません。');
-      return;
-    }
-
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditError(null);
     try {
-      await api.put(`/User/${user.id}`, { roleId: nextRole.id });
-      // 画面更新
-      setUsers(users.map(u => u.id === user.id ? { ...u, roleId: nextRole.id, roleName: nextRole.name } : u));
+      await api.put(`/User/${editUser.id}`, { roleId: editUser.roleId, isActive: editUser.isActive, studentId: editUser.studentId, enrollmentYear: editUser.enrollmentYear });
+      
+      const role = roles.find(r => r.id === editUser.roleId);
+      setUsers(users.map(u => u.id === editUser.id ? { ...u, roleId: editUser.roleId, roleName: role ? role.name : u.roleName, isActive: editUser.isActive, studentId: editUser.studentId, enrollmentYear: editUser.enrollmentYear } : u));
+      
+      setShowEditModal(false);
+      setEditUser(null);
+      alert('ユーザー情報を更新しました。');
     } catch (err) {
       console.error(err);
-      alert('権限の変更に失敗しました。');
+      setEditError(err.response?.data?.message || err.response?.data?.[0]?.description || '更新に失敗しました。');
     }
   };
 
-  const toggleActive = async (user) => {
-    const newStatus = !user.isActive;
-    try {
-      await api.put(`/User/${user.id}`, { isActive: newStatus });
-      setUsers(users.map(u => u.id === user.id ? { ...u, isActive: newStatus } : u));
-    } catch (err) {
-      console.error(err);
-      alert('ステータスの変更に失敗しました。');
+  const handlePromoteToAdmin = async (user) => {
+    const input = window.prompt(`【非常に危険な操作】\n${user.name} をシステム全体を管理できる「管理者」に昇格させようとしています。\nこの操作は元に戻せません。\n確認のため、部員の名前（${user.name}）を入力してください。`);
+    if (input === user.name) {
+      try {
+        const adminRole = roles.find(r => r.name === 'ADMIN');
+        if (!adminRole) {
+          alert('ADMINロールが見つかりません。');
+          return;
+        }
+        await api.put(`/User/${user.id}`, { roleId: adminRole.id, isActive: user.isActive, studentId: user.studentId, enrollmentYear: user.enrollmentYear });
+        
+        setUsers(users.map(u => u.id === user.id ? { ...u, roleId: adminRole.id, roleName: 'ADMIN' } : u));
+        
+        if (editUser && editUser.id === user.id) {
+          setShowEditModal(false);
+          setEditUser(null);
+        }
+        alert(`${user.name} を管理者に昇格しました。`);
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || '昇格に失敗しました。');
+      }
+    } else if (input !== null) {
+      alert('入力された名前が一致しませんでした。操作をキャンセルします。');
     }
   };
 
@@ -96,11 +117,42 @@ function UserManagement() {
       const response = await api.post('/User', newUser);
       setUsers([...users, response.data]);
       setShowAddModal(false);
-      setNewUser({ name: '', email: '', roleId: '' });
+      setNewUser({ name: '', email: '', roleId: '', studentId: '', enrollmentYear: '' });
       alert('新しい部員を追加しました！');
     } catch (err) {
       console.error(err);
       setAddError(err.response?.data?.message || err.response?.data?.[0]?.description || '追加に失敗しました。');
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!confirm(`${file.name} をアップロードして一括登録を実行しますか？\n(※大学指定の部員名簿フォーマットに対応。学籍番号からメールアドレスと入学年度を自動生成します)`)) {
+      e.target.value = null;
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      setIsLoading(true);
+      const response = await api.post('/User/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      alert(response.data.message);
+      if (response.data.errors && response.data.errors.length > 0) {
+        alert('一部の行でエラーがありました。詳細はコンソールまたはログをご確認ください。\n' + response.data.errors.slice(0, 5).join('\n') + (response.data.errors.length > 5 ? '\n...' : ''));
+      }
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || err.response?.data || 'ファイルのアップロードに失敗しました。');
+    } finally {
+      setIsLoading(false);
+      e.target.value = null;
     }
   };
 
@@ -110,11 +162,22 @@ function UserManagement() {
   return (
     <div className="user-management-container fade-in">
       <PageHeader title="部員管理" backTo="/top">
-        <button className="primary-btn" onClick={() => setShowAddModal(true)}>
-          <UserPlus size={18} />
-          新規部員追加
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <label className="secondary-btn" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', margin: 0 }}>
+            <Upload size={18} />
+            一括追加 (Excel)
+            <input type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleFileUpload} />
+          </label>
+          <button className="primary-btn" onClick={() => setShowAddModal(true)}>
+            <UserPlus size={18} />
+            新規部員追加
+          </button>
+        </div>
       </PageHeader>
+
+      <div style={{ padding: '0 24px', color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
+        ※ 部員の権限変更やアカウントの有効/無効の切り替えを行うことができます。卒業生や退部者のアカウントは適宜無効化してください。
+      </div>
 
       <main className="page-content">
         <div className="table-wrapper">
@@ -123,6 +186,8 @@ function UserManagement() {
               <tr>
                 <th>氏名</th>
                 <th>メールアドレス</th>
+                <th>学籍番号</th>
+                <th>入学年度</th>
                 <th>権限</th>
                 <th>ステータス</th>
                 <th>操作</th>
@@ -133,33 +198,43 @@ function UserManagement() {
                 <tr key={user.id} className={`table-row ${!user.isActive ? 'inactive-row' : ''}`}>
                   <td className="font-medium">{user.name}</td>
                   <td className="text-gray-500">{user.email}</td>
+                  <td className="text-gray-500">{user.studentId || '-'}</td>
+                  <td className="text-gray-500">{user.enrollmentYear ? `${user.enrollmentYear}年度` : '-'}</td>
                   <td>
-                    <button
+                    <span 
                       className={`role-badge ${user.roleName === 'ADMIN' ? 'role-admin' : 'role-member'}`}
-                      onClick={() => toggleRole(user)}
-                      title="権限を切り替える"
+                      style={{ cursor: 'default' }}
                     >
                       {user.roleName === 'ADMIN' ? <Shield size={14} /> : <ShieldOff size={14} />}
                       {user.roleName === 'ADMIN' ? '管理者' : (user.roleName || '未割当')}
-                    </button>
+                    </span>
                   </td>
                   <td>
-                    <button
+                    <span 
                       className={`status-toggle ${user.isActive ? 'status-active' : 'status-inactive'}`}
-                      onClick={() => toggleActive(user)}
+                      style={{ cursor: 'default' }}
                     >
                       {user.isActive ? <Check size={14} /> : <X size={14} />}
                       {user.isActive ? '有効' : '無効'}
-                    </button>
+                    </span>
                   </td>
                   <td>
-                    <button
-                      className="icon-action-btn danger-text"
-                      onClick={() => handleDelete(user.id, user.name)}
-                      title="無効化"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        className="icon-action-btn" 
+                        onClick={() => openEditModal(user)}
+                        title="編集"
+                      >
+                        <Edit size={18} />
+                      </button>
+                      <button 
+                        className="icon-action-btn danger-text" 
+                        onClick={() => handleDelete(user.id, user.name)}
+                        title="無効化"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -209,6 +284,22 @@ function UserManagement() {
                 />
               </div>
               <div className="form-group">
+                <label>学籍番号</label>
+                <input
+                  type="text"
+                  value={newUser.studentId || ''}
+                  onChange={e => setNewUser({ ...newUser, studentId: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>入学年度</label>
+                <input
+                  type="number"
+                  value={newUser.enrollmentYear || ''}
+                  onChange={e => setNewUser({ ...newUser, enrollmentYear: e.target.value ? parseInt(e.target.value) : '' })}
+                />
+              </div>
+              <div className="form-group">
                 <label>権限</label>
                 <select
                   value={newUser.roleId}
@@ -227,6 +318,124 @@ function UserManagement() {
                 </button>
                 <button type="submit" className="primary-btn">
                   追加する
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 編集モーダル */}
+      {showEditModal && editUser && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2>部員情報編集</h2>
+              <button className="close-btn" onClick={() => setShowEditModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="modal-body">
+              {editError && (
+                <div className="error-banner">
+                  <AlertCircle size={16} />
+                  {editError}
+                </div>
+              )}
+              <div className="form-group">
+                <label>氏名</label>
+                <input 
+                  type="text" 
+                  value={editUser.name} 
+                  disabled
+                  className="bg-gray-100"
+                  style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>メールアドレス</label>
+                <input 
+                  type="email" 
+                  value={editUser.email} 
+                  disabled
+                  className="bg-gray-100"
+                  style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+                />
+              </div>
+              <div className="form-group">
+                <label>学籍番号</label>
+                <input
+                  type="text"
+                  value={editUser.studentId || ''}
+                  onChange={e => setEditUser({ ...editUser, studentId: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>入学年度</label>
+                <input
+                  type="number"
+                  value={editUser.enrollmentYear || ''}
+                  onChange={e => setEditUser({ ...editUser, enrollmentYear: e.target.value ? parseInt(e.target.value) : '' })}
+                />
+              </div>
+              <div className="form-group">
+                <label>権限</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select 
+                    value={editUser.roleId || ''} 
+                    onChange={e => setEditUser({...editUser, roleId: e.target.value})} 
+                    required
+                    disabled={editUser.roleName === 'ADMIN'}
+                  >
+                    <option value="">選択してください</option>
+                    {roles.filter(r => r.name !== 'ADMIN').map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                  {editUser.roleName !== 'ADMIN' && (
+                    <button 
+                      type="button" 
+                      className="secondary-btn" 
+                      style={{ margin: 0, whiteSpace: 'nowrap', borderColor: '#ef4444', color: '#ef4444' }}
+                      onClick={() => handlePromoteToAdmin(editUser)}
+                    >
+                      管理者に昇格
+                    </button>
+                  )}
+                  {editUser.roleName === 'ADMIN' && (
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>※ 管理者の権限は変更できません</span>
+                  )}
+                </div>
+              </div>
+              <div className="form-group">
+                <label>ステータス</label>
+                <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '8px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input 
+                      type="radio" 
+                      name="isActive" 
+                      checked={editUser.isActive === true} 
+                      onChange={() => setEditUser({...editUser, isActive: true})} 
+                    />
+                    有効
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <input 
+                      type="radio" 
+                      name="isActive" 
+                      checked={editUser.isActive === false} 
+                      onChange={() => setEditUser({...editUser, isActive: false})} 
+                    />
+                    無効
+                  </label>
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="secondary-btn" onClick={() => setShowEditModal(false)}>
+                  キャンセル
+                </button>
+                <button type="submit" className="primary-btn">
+                  保存する
                 </button>
               </div>
             </form>
