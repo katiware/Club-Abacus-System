@@ -28,9 +28,25 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     /// </summary>
     [HttpGet("summary")]
     [Authorize] // 誰でも見れるが、権限によって内容を変えることも可能
-    public async Task<ActionResult<ExpenseSummaryDto>> GetSummary(CancellationToken cancellationToken = default)
+    public async Task<ActionResult<ExpenseSummaryDto>> GetSummary([FromQuery] string viewMode = "me", CancellationToken cancellationToken = default)
     {
-        var pendingCount = await context.ExpenseRequests
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        _ = Guid.TryParse(userIdString, out var currentUserId);
+
+        var isAdmin = User.HasClaim("Permission", PermissionType.ExpenseReadAll.ToString());
+
+        if (!isAdmin)
+        {
+            viewMode = "me";
+        }
+
+        var query = context.ExpenseRequests.AsQueryable();
+        if (viewMode == "me")
+        {
+            query = query.Where(e => e.UserId == currentUserId);
+        }
+
+        var pendingCount = await query
             .Where(e => e.Status == ExpenseStatus.PendingApproval || e.Status == ExpenseStatus.WaitingConfirmation)
             .CountAsync(cancellationToken);
 
@@ -93,9 +109,8 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         // TODO: 期限切れの計算（事前出金で未精算かつ期日超過のものなど。とりあえず固定値）
         var overdueCount = 0;
 
-        var userIdString = User.FindFirstValue(System.Security.Claims.ClaimTypes.NameIdentifier);
         int unfinalizedCount = 0;
-        if (Guid.TryParse(userIdString, out var currentUserId))
+        if (currentUserId != Guid.Empty)
         {
             unfinalizedCount = await context.ExpenseRequests
                 .Where(e => e.UserId == currentUserId && e.IsAmountVariable && !e.IsAmountFinalized 

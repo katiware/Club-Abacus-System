@@ -14,23 +14,25 @@ function TopPage() {
     navigate('/login');
   };
 
+  const [viewMode, setViewMode] = useState(userRole === 'ADMIN' ? 'all' : 'me');
   const [summaryData, setSummaryData] = useState({
     pendingCount: 0,
     overdueCount: 0,
-    budgetBalance: 0
+    budgetBalance: 0,
+    unfinalizedCount: 0
   });
 
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const response = await api.get('/Expense/summary');
+        const response = await api.get(`/Expense/summary?viewMode=${viewMode}`);
         setSummaryData(response.data);
       } catch (err) {
         console.error('Failed to fetch summary data', err);
       }
     };
     fetchSummary();
-  }, []);
+  }, [viewMode]);
 
   const { pendingCount, overdueCount, budgetBalance, unfinalizedCount } = summaryData;
 
@@ -56,7 +58,21 @@ function TopPage() {
 
         {/* ダッシュボード領域（アラート・統計） */}
         <section className="dashboard-section">
-          <h2>ダッシュボード</h2>
+          <div className="dashboard-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2>ダッシュボード</h2>
+            {userRole === 'ADMIN' && (
+              <div className="view-mode-toggle" style={{ display: 'flex', gap: '5px', backgroundColor: '#f1f3f5', padding: '4px', borderRadius: '8px' }}>
+                <button 
+                  style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer', backgroundColor: viewMode === 'all' ? '#fff' : 'transparent', boxShadow: viewMode === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontWeight: viewMode === 'all' ? '600' : 'normal' }}
+                  onClick={() => setViewMode('all')}
+                >全体</button>
+                <button 
+                  style={{ padding: '6px 12px', border: 'none', borderRadius: '6px', cursor: 'pointer', backgroundColor: viewMode === 'me' ? '#fff' : 'transparent', boxShadow: viewMode === 'me' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontWeight: viewMode === 'me' ? '600' : 'normal' }}
+                  onClick={() => setViewMode('me')}
+                >自分のみ</button>
+              </div>
+            )}
+          </div>
 
           {unfinalizedCount > 0 && (
             <div className="overdue-alert-banner" style={{ backgroundColor: '#fff3cd', color: '#856404', borderColor: '#ffeeba' }}>
