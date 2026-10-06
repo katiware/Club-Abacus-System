@@ -204,7 +204,6 @@ function UserManagement() {
                         <Trash2 size={18} />
                       </button>
                     </div>
->>>>>>> ee7000a (ボタンのバグの修正)
                   </td>
                 </tr>
               ))}
