@@ -65,6 +65,8 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
             return BadRequest("終了日は開始日より後に設定してください。");
         }
 
+
+
         // 既存の年度と期間が重複していないかチェック
         var overlapping = await context.FiscalYears.AnyAsync(f =>
             f.StartDate <= dto.EndDate && f.EndDate >= dto.StartDate);
@@ -121,11 +123,79 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
     }
 
     /// <summary>
+    /// 年度を開始します（IsActive = true）。
+    /// すでに進行中の年度がある場合はエラーになります。
+    /// </summary>
+    [HttpPost("{id}/start")]
+    [RequirePermission(PermissionType.ManageMasterData)]
+    public async Task<IActionResult> StartFiscalYear(Guid id)
+    {
+        var fiscalYear = await context.FiscalYears.FindAsync(id);
+
+        if (fiscalYear == null)
+        {
+            return NotFound("指定された年度は見つかりません。");
+        }
+
+        if (fiscalYear.IsClosed)
+        {
+            return BadRequest("締め済みの年度は開始できません。");
+        }
+
+        if (fiscalYear.IsActive)
+        {
+            return BadRequest("この年度はすでに進行中です。");
+        }
+
+        var hasActive = await context.FiscalYears.AnyAsync(f => f.IsActive);
+        if (hasActive)
+        {
+            return BadRequest("すでに進行中の年度が存在します。現在の年度を締めてから新しい年度を開始してください。");
+        }
+
+        fiscalYear.IsActive = true;
+        fiscalYear.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// 新規申請の停止/再開を切り替えます。
+    /// </summary>
+    [HttpPost("{id}/toggle-applications")]
+    [RequirePermission(PermissionType.ManageMasterData)]
+    public async Task<IActionResult> ToggleApplications(Guid id)
+    {
+        var fiscalYear = await context.FiscalYears.FindAsync(id);
+
+        if (fiscalYear == null)
+        {
+            return NotFound("指定された年度は見つかりません。");
+        }
+
+        if (fiscalYear.IsClosed)
+        {
+            return BadRequest("締め済みの年度の設定は変更できません。");
+        }
+
+        fiscalYear.IsApplicationsStopped = !fiscalYear.IsApplicationsStopped;
+        fiscalYear.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        return Ok(new { fiscalYear.IsApplicationsStopped });
+    }
+
+    /// <summary>
     /// 年度を締めます（IsClosed = true）。締め後は変更不可になります。
+    /// 未完了の申請がある場合、force=false だと 409 Conflict を返し、
+    /// force=true だとそれらを自動却下して締め処理を完了します。
     /// </summary>
     [HttpPost("{id}/close")]
     [RequirePermission(PermissionType.ManageMasterData)]
-    public async Task<IActionResult> CloseFiscalYear(Guid id)
+    public async Task<IActionResult> CloseFiscalYear(Guid id, [FromQuery] bool force = false)
     {
         var fiscalYear = await context.FiscalYears.FindAsync(id);
 
@@ -139,6 +209,33 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
             return BadRequest("この年度はすでに締め済みです。");
         }
 
+        // 未完了の申請を検索 (Settled, Rejected, UniversitySubmitted 以外)
+        var pendingRequests = await context.ExpenseRequests
+            .Where(e => e.Status != ExpenseStatus.Settled && e.Status != ExpenseStatus.Rejected && e.Status != ExpenseStatus.UniversitySubmitted)
+            .Where(e => e.CreatedAt >= fiscalYear.StartDate.ToDateTime(TimeOnly.MinValue) && 
+                        e.CreatedAt <= fiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue))
+            .ToListAsync();
+
+        if (pendingRequests.Any() && !force)
+        {
+            return StatusCode(409, new 
+            { 
+                message = $"申請途中の経費が {pendingRequests.Count} 件残っています。年度を締めるとこれらは自動的に却下されます。本当に締めますか？", 
+                pendingCount = pendingRequests.Count 
+            });
+        }
+
+        if (pendingRequests.Any() && force)
+        {
+            foreach (var req in pendingRequests)
+            {
+                req.Status = ExpenseStatus.Rejected;
+                req.RejectionReason = "年度締め処理による自動却下";
+                req.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        fiscalYear.IsActive = false;
         fiscalYear.IsClosed = true;
         fiscalYear.UpdatedAt = DateTime.UtcNow;
 

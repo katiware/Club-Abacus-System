@@ -21,6 +21,10 @@ public class FiscalYear
     [Required]
     public int TotalBudget { get; set; } = 0; // 今年度の部費予算総額
 
+    public bool IsActive { get; set; } = false; // 進行中フラグ
+
+    public bool IsApplicationsStopped { get; set; } = false; // 新規申請の停止フラグ
+
     public bool IsClosed { get; set; } = false; // 年度締めフラグ
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

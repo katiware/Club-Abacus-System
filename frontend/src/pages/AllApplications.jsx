@@ -13,11 +13,29 @@ function AllApplications() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [error, setError] = useState(null);
 
+  const [fiscalYears, setFiscalYears] = useState([]);
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        const fyRes = await api.get('/FiscalYear');
+        setFiscalYears(fyRes.data);
+        const activeFy = fyRes.data.find(f => f.isActive);
+        if (activeFy) setSelectedFiscalYear(activeFy.id);
+      } catch (err) {
+        console.error('Failed to fetch fiscal years', err);
+      }
+    };
+    fetchInitialData();
+  }, []);
+
   useEffect(() => {
     const fetchAllApplications = async () => {
       setIsLoading(true);
       try {
-        const response = await api.get('/Expense/all');
+        const url = selectedFiscalYear ? `/Expense/all?fiscalYearId=${selectedFiscalYear}` : '/Expense/all';
+        const response = await api.get(url);
         setApplications(response.data);
       } catch (err) {
         console.error('Failed to fetch all applications', err);
@@ -28,7 +46,7 @@ function AllApplications() {
     };
 
     fetchAllApplications();
-  }, []);
+  }, [selectedFiscalYear]);
 
   const getStatusBadge = (app) => {
     switch (app.status) {
@@ -92,6 +110,18 @@ function AllApplications() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
+          </div>
+          <div className="filter-dropdown" style={{ marginRight: '16px' }}>
+            <Filter size={18} className="filter-icon" />
+            <select 
+              value={selectedFiscalYear} 
+              onChange={(e) => setSelectedFiscalYear(e.target.value)}
+            >
+              <option value="">すべての年度</option>
+              {fiscalYears.map(fy => (
+                <option key={fy.id} value={fy.id}>{fy.yearName}</option>
+              ))}
+            </select>
           </div>
           
           <div className="filter-dropdown">
