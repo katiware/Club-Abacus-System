@@ -16,6 +16,11 @@ public class User : IdentityUser<Guid>
     [MaxLength(100)]
     public string Name { get; set; } = string.Empty; // 氏名
 
+    [MaxLength(20)]
+    public string StudentId { get; set; } = string.Empty; // 学籍番号
+
+    public int? EnrollmentYear { get; set; } // 入学年度 (自動無効化などに使用。既存ユーザーのためにNullable)
+
     [MaxLength(100)]
     public string DiscordId { get; set; } = string.Empty; // DiscordユーザーID
 

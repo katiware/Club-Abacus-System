@@ -237,13 +237,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         await context.SaveChangesAsync(cancellationToken);
 
-        // 商品未定フラグが立っている明細がある場合、Discordに議論用スレッドを作成する
-        if (expenseRequest.ExpenseItems.Any(i => i.IsProductUndecided))
-        {
-            await discordService.CreatePurchaseDiscussionThreadAsync(expenseRequest);
-            // サービス内でスレッドIDなどを保存した場合はもう一度Save
-            await context.SaveChangesAsync(cancellationToken);
-        }
+
 
         return CreatedAtAction(nameof(GetExpenseRequestById), new { id = expenseRequest.Id }, expenseRequest);
     }
@@ -360,7 +354,9 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             return Unauthorized("ユーザー情報が取得できません。");
         }
 
-        var expenseRequest = await context.ExpenseRequests.FindAsync(new object[] { id }, cancellationToken);
+        var expenseRequest = await context.ExpenseRequests
+            .Include(e => e.ExpenseItems)
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
         if (expenseRequest == null)
         {
@@ -394,6 +390,13 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         });
 
         await context.SaveChangesAsync(cancellationToken);
+
+        // 商品未定フラグが立っている明細がある場合、Discordに通知する（提出タイミング）
+        if (expenseRequest.ExpenseItems.Any(i => i.IsProductUndecided))
+        {
+            await discordService.CreatePurchaseDiscussionThreadAsync(expenseRequest);
+        }
+
         return Ok();
     }
 
@@ -559,7 +562,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         // 🚨 セキュリティ対策: 自分の申請は自分で承認・却下できないようにする
         if (expenseRequest.UserId == currentUserId)
         {
-            return StatusCode(403, "自分の申請を自分で承認・却下することはできません。");
+            return StatusCode(StatusCodes.Status403Forbidden, "自分の申請を自分で承認・却下することはできません。");
         }
 
         if (dto.Status != ExpenseStatus.Approved && dto.Status != ExpenseStatus.Rejected)
@@ -619,14 +622,14 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (Guid.TryParse(userIdString, out var currentUserId) && expenseRequest.UserId == currentUserId)
         {
-            return StatusCode(403, "自分の申請に対する事後処理（確認・精算等）を自分で行うことはできません。");
+            return StatusCode(StatusCodes.Status403Forbidden, "自分の申請に対する事後処理（確認・精算等）を自分で行うことはできません。");
         }
 
         // 必要な権限のチェック
         if (!User.HasClaim("Permission", PermissionType.ExpenseConfirmReceipt.ToString()) &&
             !User.HasClaim("Permission", PermissionType.ExpenseSettle.ToString()))
         {
-            return StatusCode(403, "領収書の確認・精算などの操作を行う権限がありません。");
+            return StatusCode(StatusCodes.Status403Forbidden, "領収書の確認・精算などの操作を行う権限がありません。");
         }
 
         // 承認前・却下済みの場合は操作不可
