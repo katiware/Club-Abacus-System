@@ -72,7 +72,6 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         {
             UserId = dto.UserId,
             TemplateName = dto.TemplateName,
-            Title = dto.Title,
             RecurringFrequency = dto.RecurringFrequency,
             ExpenseType = dto.ExpenseType,
             ReceiptType = dto.ReceiptType,
@@ -111,7 +110,6 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         }
 
         if (dto.TemplateName != null) template.TemplateName = dto.TemplateName;
-        if (dto.Title != null) template.Title = dto.Title;
         if (dto.TemplateStatus.HasValue) template.TemplateStatus = dto.TemplateStatus.Value;
         if (dto.ItemName != null) template.ItemName = dto.ItemName;
         if (dto.Amount.HasValue) template.Amount = dto.Amount.Value;
@@ -178,10 +176,10 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         var expenseRequest = new ExpenseRequest
         {
             UserId = template.UserId,
-            Title = template.Title,
+            Title = template.TemplateName,
             Type = template.ExpenseType,
             ReceiptType = template.ReceiptType,
-            Status = ExpenseStatus.Draft, // 下書きからスタート
+            Status = ExpenseStatus.PendingApproval, // 承認待ち状態で生成
             RecurringTemplateId = template.Id,
             TotalAmount = template.Amount,
             IsAmountVariable = template.IsAmountVariable,

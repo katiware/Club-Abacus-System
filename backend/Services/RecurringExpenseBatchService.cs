@@ -74,14 +74,13 @@ public class RecurringExpenseBatchService : BackgroundService
             var expenseRequest = new ExpenseRequest
             {
                 UserId = template.UserId,
+                Title = template.TemplateName,
                 Type = template.ExpenseType,
                 ReceiptType = template.ReceiptType,
-                Status = ExpenseStatus.Approved, // 事前承認済からスタート
+                Status = ExpenseStatus.PendingApproval, // 承認待ちからスタート
                 RecurringTemplateId = template.Id,
                 TotalAmount = template.Amount,
                 IsAmountVariable = template.IsAmountVariable,
-                // 事前承認済とするため、便宜的に日時をセット
-                ApprovedAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 ExpenseItems = new List<ExpenseItem>

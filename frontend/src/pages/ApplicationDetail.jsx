@@ -146,9 +146,9 @@ function ApplicationDetail() {
     }
 
     try {
-      if (app.isAmountVariable && !app.isAmountFinalized) {
+      if ((app.isAmountVariable || app.type === 'Advance') && !app.isAmountFinalized) {
         if (!actualAmount) {
-          setUploadMessage({ type: 'error', text: '実際の請求額を入力してください。' });
+          setUploadMessage({ type: 'error', text: '実際の費用（確定金額）を入力してください。' });
           setUploading(false);
           return;
         }
@@ -183,11 +183,34 @@ function ApplicationDetail() {
       if (!confirmReject) return;
     }
 
+    if (newStatus === 'Settled' || newStatus === 'WaitingConfirmation') {
+      if ((app.isAmountVariable || app.type === 'Advance') && !app.isAmountFinalized) {
+        const actualAmtStr = window.prompt(`実際の費用（確定金額）を入力してください。\n見積金額: ${app.totalAmount}円`);
+        if (actualAmtStr === null) return; // キャンセル
+        const actualAmt = parseInt(actualAmtStr, 10);
+        if (isNaN(actualAmt)) {
+          alert('有効な金額を入力してください。');
+          return;
+        }
+        try {
+          await api.put(`/Expense/${id}/amount`, actualAmt, {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err) {
+          console.error(err);
+          alert('金額の更新に失敗しました。');
+          return;
+        }
+      }
+    }
+
     try {
       if (newStatus === 'Rejected') {
-        await api.put(`/Expense/${id}/reject`, { reason: "管理者による却下" });
+        const reason = window.prompt('却下理由を入力してください（任意）:');
+        if (reason === null) return; // Cancelled
+        await api.put(`/Expense/${id}/approve`, { status: newStatus, rejectionReason: reason || "管理者による却下" });
       } else {
-        await api.put(`/Expense/${id}/approve`, { newStatus });
+        await api.put(`/Expense/${id}/approve`, { status: newStatus });
       }
       alert('ステータスを更新しました');
       fetchAppDetail();
@@ -351,10 +374,10 @@ function ApplicationDetail() {
 
       <main className="detail-layout">
         <div className="detail-main-col">
-          {app.isAmountVariable && !app.isAmountFinalized && (
+          {(app.isAmountVariable || app.type === 'Advance') && !app.isAmountFinalized && (
             <div className="warning-banner" style={{backgroundColor: '#fff3cd', color: '#856404', padding: '12px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center'}}>
               <AlertCircle size={20} style={{marginRight: '8px'}} />
-              <span><strong>金額未確定:</strong> 為替レートなどによる金額変動が設定されている申請です。証憑提出時に実際の請求額を入力して金額を確定させてください。</span>
+              <span><strong>金額未確定:</strong> 見積もりや為替変動による申請です。証憑提出時（または精算時）に実際の費用を入力して確定させてください。</span>
             </div>
           )}
           <section className="detail-card">
@@ -379,8 +402,8 @@ function ApplicationDetail() {
               <div className="info-item full-width amount-highlight">
                 <span className="info-label">申請合計金額</span>
                 <span className="info-value amount-text">
-                  {app.isAmountVariable && !app.isAmountFinalized ? `~¥${app.totalAmount.toLocaleString()} (目安)` : `¥${app.totalAmount.toLocaleString()}`}
-                  {app.isAmountVariable && !app.isAmountFinalized && (
+                  {(app.isAmountVariable || app.type === 'Advance') && !app.isAmountFinalized ? `~¥${app.totalAmount.toLocaleString()} (目安)` : `¥${app.totalAmount.toLocaleString()}`}
+                  {(app.isAmountVariable || app.type === 'Advance') && !app.isAmountFinalized && (
                     <span className="status-badge warning" style={{backgroundColor: '#ffeeba', color: '#856404', marginLeft: '12px', fontSize: '12px', fontWeight: 'normal'}}>金額未確定</span>
                   )}
                 </span>
@@ -573,9 +596,9 @@ function ApplicationDetail() {
                     </select>
                   </div>
 
-                  {app.isAmountVariable && !app.isAmountFinalized && (
+                  {((app.isAmountVariable || app.type === 'Advance') && !app.isAmountFinalized) && (
                     <div className="amount-update-section" style={{marginBottom: '16px', padding: '12px', backgroundColor: '#f8f9fa', borderRadius: '4px'}}>
-                      <h4 style={{fontSize: '13px', marginBottom: '8px', color: '#495057'}}>実際の請求額を入力してください</h4>
+                      <h4 style={{fontSize: '13px', marginBottom: '8px', color: '#495057'}}>実際の費用を入力してください</h4>
                       <div style={{display: 'flex', alignItems: 'center'}}>
                         <span style={{marginRight: '8px'}}>¥</span>
                         <input 

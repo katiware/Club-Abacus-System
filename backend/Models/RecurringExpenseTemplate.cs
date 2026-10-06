@@ -15,16 +15,13 @@ public class RecurringExpenseTemplate
     [Required]
     public Guid UserId { get; set; } // テンプレート作成者（経費の申請者）のID
 
-    [Required]
-    [MaxLength(255)]
-    public string TemplateName { get; set; } = string.Empty; // テンプレート名（例：「毎月のサーバー代」「年額のドメイン代」）
 
     [Required]
     public TemplateStatus TemplateStatus { get; set; } = TemplateStatus.Active; // この定期支払いの状態（有効 / 無効）
 
     [Required]
     [MaxLength(255)]
-    public string Title { get; set; } = string.Empty; // 生成される申請のタイトル
+    public string TemplateName { get; set; } = string.Empty; // テンプレート名（生成される申請のタイトルも兼ねる）
 
     [Required]
     public RecurringFrequency RecurringFrequency { get; set; } // 自動生成の頻度（毎月 / 毎年など）
