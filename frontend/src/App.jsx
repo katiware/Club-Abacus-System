@@ -13,6 +13,7 @@ import ApplicationDetail from './pages/ApplicationDetail';
 import RecurringPayments from './pages/RecurringPayments';
 import ProfileSettings from './pages/ProfileSettings';
 import FiscalYearSettings from './pages/FiscalYearSettings';
+import FiscalYearDashboard from './pages/FiscalYearDashboard';
 import './App.css';
 
 // A simple PrivateRoute component for protecting routes
@@ -131,6 +132,14 @@ function App() {
           element={
             <AdminRoute>
               <FiscalYearSettings />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/fiscal-year-dashboard/:id"
+          element={
+            <AdminRoute>
+              <FiscalYearDashboard />
             </AdminRoute>
           }
         />

@@ -34,6 +34,7 @@ public class RecurringExpenseBatchService : BackgroundService
             try
             {
                 await ProcessRecurringExpensesAsync(stoppingToken);
+                await ProcessExpiredFiscalYearsAsync(stoppingToken);
             }
             catch (Exception ex)
             {
@@ -124,5 +125,53 @@ public class RecurringExpenseBatchService : BackgroundService
 
         await dbContext.SaveChangesAsync(stoppingToken);
         _logger.LogInformation($"Successfully processed {templatesToProcess.Count} recurring expenses.");
+    }
+
+    private async Task ProcessExpiredFiscalYearsAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        
+        // JST基準で計算
+        var jstZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Tokyo");
+        var todayJst = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, jstZone));
+
+        var expiredYears = await dbContext.FiscalYears
+            .Where(f => !f.IsClosed && f.EndDate < todayJst)
+            .ToListAsync(stoppingToken);
+
+        foreach (var fy in expiredYears)
+        {
+            fy.IsClosed = true;
+            fy.IsActive = false;
+
+            // 当該年度に属する未完了の申請を自動却下
+            var pendingRequests = await dbContext.ExpenseRequests
+                .Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue) &&
+                            e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue) &&
+                            e.Status != ExpenseStatus.Settled &&
+                            e.Status != ExpenseStatus.UniversitySubmitted &&
+                            e.Status != ExpenseStatus.Rejected)
+                .ToListAsync(stoppingToken);
+
+            foreach (var req in pendingRequests)
+            {
+                req.Status = ExpenseStatus.Rejected;
+                dbContext.AuditLogs.Add(new AuditLog
+                {
+                    TargetType = "ExpenseRequests",
+                    TargetId = req.Id,
+                    Action = "SYSTEM_AUTO_REJECT",
+                    NewValue = "年度終了のため自動却下されました。"
+                });
+            }
+            
+            _logger.LogInformation($"FiscalYear {fy.YearName} was auto-closed on expiration.");
+        }
+
+        if (expiredYears.Any())
+        {
+            await dbContext.SaveChangesAsync(stoppingToken);
+        }
     }
 }

@@ -19,13 +19,15 @@ function TopPage() {
     pendingCount: 0,
     overdueCount: 0,
     budgetBalance: 0,
-    unfinalizedCount: 0
+    unfinalizedCount: 0,
+    yearName: ''
   });
 
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const response = await api.get(`/Expense/summary?viewMode=${viewMode}`);
+        let url = `/Expense/summary?viewMode=${viewMode}`;
+        const response = await api.get(url);
         setSummaryData(response.data);
       } catch (err) {
         console.error('Failed to fetch summary data', err);
@@ -34,7 +36,7 @@ function TopPage() {
     fetchSummary();
   }, [viewMode]);
 
-  const { pendingCount, overdueCount, budgetBalance, unfinalizedCount } = summaryData;
+  const { pendingCount, overdueCount, budgetBalance, unfinalizedCount, yearName } = summaryData;
 
   return (
     <div className="top-page-container">

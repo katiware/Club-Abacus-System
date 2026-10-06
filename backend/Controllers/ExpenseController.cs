@@ -28,7 +28,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     /// </summary>
     [HttpGet("summary")]
     [Authorize] // 誰でも見れるが、権限によって内容を変えることも可能
-    public async Task<ActionResult<ExpenseSummaryDto>> GetSummary([FromQuery] string viewMode = "me", CancellationToken cancellationToken = default)
+    public async Task<ActionResult<ExpenseSummaryDto>> GetSummary([FromQuery] string viewMode = "me", [FromQuery] Guid? fiscalYearId = null, CancellationToken cancellationToken = default)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
         _ = Guid.TryParse(userIdString, out var currentUserId);
@@ -46,29 +46,63 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             query = query.Where(e => e.UserId == currentUserId);
         }
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        FiscalYear? currentFiscalYear = null;
+
+        if (fiscalYearId.HasValue)
+        {
+            currentFiscalYear = await context.FiscalYears.FirstOrDefaultAsync(f => f.Id == fiscalYearId.Value, cancellationToken);
+        }
+        else
+        {
+            currentFiscalYear = await context.FiscalYears
+                .FirstOrDefaultAsync(f => f.IsActive, cancellationToken);
+        }
+
+        if (currentFiscalYear != null)
+        {
+            var startDateTime = currentFiscalYear.StartDate.ToDateTime(TimeOnly.MinValue);
+            var endDateTime = currentFiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue);
+            query = query.Where(e => e.CreatedAt >= startDateTime && e.CreatedAt <= endDateTime);
+        }
+
         var pendingCount = await query
             .Where(e => e.Status == ExpenseStatus.PendingApproval || e.Status == ExpenseStatus.WaitingConfirmation)
             .CountAsync(cancellationToken);
-
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var currentFiscalYear = await context.FiscalYears
-            .FirstOrDefaultAsync(f => f.StartDate <= today && f.EndDate >= today, cancellationToken);
 
         // TODO: 本格的な予算残高の計算ロジック
         // 本来は currentFiscalYear.TotalBudget から、今年度のすべての確定済み経費を引く必要がありますが、
         // 現状は固定値をベースとしています。
         var budgetBalance = currentFiscalYear != null ? (decimal)currentFiscalYear.TotalBudget : 125000m;
 
+        decimal settledTotal = 0;
+        var categoryTotals = new Dictionary<string, decimal>();
         // 今年度の確定済み経費を差し引く（簡易的な計算）
         if (currentFiscalYear != null)
         {
-            var settledTotal = await context.ExpenseRequests
+            var settledRequests = await context.ExpenseRequests
+                .Include(e => e.ExpenseItems)
                 .Where(e => e.Status == ExpenseStatus.Settled || e.Status == ExpenseStatus.UniversitySubmitted)
                 // 簡易的に CreatedAt で今年度分を判定
                 .Where(e => e.CreatedAt >= currentFiscalYear.StartDate.ToDateTime(TimeOnly.MinValue) && 
                             e.CreatedAt <= currentFiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue))
-                .SumAsync(e => e.TotalAmount, cancellationToken);
+                .ToListAsync(cancellationToken);
+
+            settledTotal = settledRequests.Sum(e => e.TotalAmount);
             budgetBalance -= settledTotal;
+
+            foreach (var req in settledRequests)
+            {
+                foreach (var item in req.ExpenseItems)
+                {
+                    var cat = string.IsNullOrWhiteSpace(item.Category) ? "その他" : item.Category;
+                    if (!categoryTotals.ContainsKey(cat))
+                    {
+                        categoryTotals[cat] = 0;
+                    }
+                    categoryTotals[cat] += (item.UnitPrice * item.Quantity);
+                }
+            }
         }
 
         // 未生成の有効な定期払いテンプレートの合計金額（予定額）を控除する
@@ -118,12 +152,19 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
                 .CountAsync(cancellationToken);
         }
 
+        var totalRequestsCount = await query.CountAsync(cancellationToken);
+
         return Ok(new ExpenseSummaryDto
         {
             PendingCount = pendingCount,
             OverdueCount = overdueCount,
             BudgetBalance = budgetBalance,
-            UnfinalizedCount = unfinalizedCount
+            UnfinalizedCount = unfinalizedCount,
+            YearName = currentFiscalYear?.YearName,
+            TotalBudget = currentFiscalYear != null ? (decimal)currentFiscalYear.TotalBudget : 125000m,
+            SettledTotal = settledTotal,
+            TotalRequestsCount = totalRequestsCount,
+            CategoryTotals = categoryTotals
         });
     }
     /// <summary>
@@ -138,6 +179,19 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         if (!Guid.TryParse(userIdString, out var currentUserId))
         {
             return Unauthorized("ユーザー情報が取得できません。");
+        }
+
+        var activeFiscalYear = await context.FiscalYears
+            .FirstOrDefaultAsync(f => f.IsActive, cancellationToken);
+
+        if (activeFiscalYear == null)
+        {
+            return BadRequest("現在進行中の年度が存在しないか、締め処理されています。経費申請は行えません。");
+        }
+
+        if (activeFiscalYear.IsApplicationsStopped)
+        {
+            return BadRequest("現在、この年度の新規申請は停止されています。");
         }
 
         // ユーザーが存在するか確認
@@ -231,12 +285,25 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     /// </summary>
     [HttpGet("all")]
     [RequirePermission(PermissionType.ExpenseReadAll)]
-    public async Task<ActionResult<List<ExpenseRequest>>> GetAllExpenseRequests(CancellationToken cancellationToken = default)
+    public async Task<ActionResult<List<ExpenseRequest>>> GetAllExpenseRequests([FromQuery] Guid? fiscalYearId = null, CancellationToken cancellationToken = default)
     {
-        var requests = await context.ExpenseRequests
+        var query = context.ExpenseRequests
             .AsNoTracking()
             .Include(e => e.User)
             .Include(e => e.ExpenseItems)
+            .AsQueryable();
+
+        if (fiscalYearId.HasValue)
+        {
+            var fy = await context.FiscalYears.FindAsync(new object[] { fiscalYearId.Value }, cancellationToken);
+            if (fy != null)
+            {
+                query = query.Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue) && 
+                                         e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue));
+            }
+        }
+
+        var requests = await query
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync(cancellationToken);
 
@@ -248,7 +315,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     /// </summary>
     [HttpGet("me")]
     [RequirePermission(PermissionType.ExpenseManageOwn)]
-    public async Task<ActionResult<List<ExpenseRequest>>> GetMyExpenseRequests(CancellationToken cancellationToken = default)
+    public async Task<ActionResult<List<ExpenseRequest>>> GetMyExpenseRequests([FromQuery] Guid? fiscalYearId = null, CancellationToken cancellationToken = default)
     {
         var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (!Guid.TryParse(userIdString, out var currentUserId))
@@ -256,10 +323,23 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             return Unauthorized("ユーザー情報が取得できません。");
         }
 
-        var requests = await context.ExpenseRequests
+        var query = context.ExpenseRequests
             .AsNoTracking()
             .Include(e => e.ExpenseItems)
             .Where(e => e.UserId == currentUserId)
+            .AsQueryable();
+
+        if (fiscalYearId.HasValue)
+        {
+            var fy = await context.FiscalYears.FindAsync(new object[] { fiscalYearId.Value }, cancellationToken);
+            if (fy != null)
+            {
+                query = query.Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue) && 
+                                         e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue));
+            }
+        }
+
+        var requests = await query
             .OrderByDescending(e => e.CreatedAt)
             .ToListAsync(cancellationToken);
 

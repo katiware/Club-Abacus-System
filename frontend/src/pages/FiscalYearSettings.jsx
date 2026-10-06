@@ -54,8 +54,20 @@ function FiscalYearSettings() {
       await fetchFiscalYears();
     } catch (err) {
       console.error(err);
-      const errMsg = err.response?.data?.message || err.response?.data || '登録に失敗しました。';
-      alert(`エラー: ${errMsg}`);
+      let errMsg = '登録に失敗しました。';
+      if (err.response?.data) {
+        if (typeof err.response.data === 'string') {
+          errMsg = err.response.data;
+        } else if (err.response.data.message) {
+          errMsg = err.response.data.message;
+        } else if (err.response.data.errors) {
+          // ASP.NET Core Validation errors
+          errMsg = Object.values(err.response.data.errors).flat().join('\n');
+        } else {
+          errMsg = JSON.stringify(err.response.data);
+        }
+      }
+      alert(`エラー:\n${errMsg}`);
     }
   };
 
@@ -66,8 +78,39 @@ function FiscalYearSettings() {
         alert('年度を締めました。');
         await fetchFiscalYears();
       } catch (err) {
-        console.error(err);
-        alert('締め処理に失敗しました。');
+        if (err.response && err.response.status === 409) {
+          const forceConfirm = window.confirm(err.response.data.message);
+          if (forceConfirm) {
+            try {
+              await api.post(`/FiscalYear/${id}/close?force=true`);
+              alert('締め処理が完了し、未完了の申請は却下されました。');
+              await fetchFiscalYears();
+            } catch (forceErr) {
+              alert(`エラー: ${forceErr.response?.data?.message || forceErr.response?.data || '締め処理に失敗しました'}`);
+            }
+          }
+        } else {
+          alert(`エラー: ${err.response?.data?.message || err.response?.data || '締め処理に失敗しました'}`);
+        }
+      }
+    }
+  };
+
+  const handleToggleApplications = async (id) => {
+    try {
+      await api.post(`/FiscalYear/${id}/toggle-applications`);
+      fetchFiscalYears();
+    } catch (err) {
+      alert(`エラー: ${err.response?.data || '変更に失敗しました'}`);
+    }
+  };
+
+  const handleSendAlerts = async (id) => {
+    if (window.confirm('現在申請途中のすべての申請者および承認者に、締め切り前のアラート通知を送信しますか？')) {
+      try {
+        alert('【通知送信完了】\n設定されたWebhookを通じて通知が送信されました。（※現在はモック動作です）');
+      } catch (err) {
+        alert('エラーが発生しました。');
       }
     }
   };
@@ -165,8 +208,8 @@ function FiscalYearSettings() {
                     <div className="year-info">
                       <h3>
                         {fy.yearName}
-                        <span className={`badge-status ${fy.isClosed ? 'closed' : 'active'}`}>
-                          {fy.isClosed ? '締め済' : '進行中'}
+                        <span className={`badge-status ${fy.isClosed ? 'closed' : (fy.isActive ? 'active' : 'pending')}`}>
+                          {fy.isClosed ? '締め済' : (fy.isActive ? '進行中' : '開始前')}
                         </span>
                       </h3>
                       <div className="year-meta">
@@ -174,16 +217,47 @@ function FiscalYearSettings() {
                         <span>予算総額: ¥{fy.totalBudget.toLocaleString()}</span>
                       </div>
                     </div>
-                    <div className="year-actions">
-                      {!fy.isClosed && (
+                    <div className="year-actions" style={{ display: 'flex', gap: '8px' }}>
+                      <button 
+                        className="secondary-btn" 
+                        onClick={() => navigate(`/fiscal-year-dashboard/${fy.id}`)}
+                      >
+                        ダッシュボードを開く
+                      </button>
+                      {!fy.isClosed && !fy.isActive && (
                         <button 
-                          className="secondary-btn" 
-                          style={{ color: '#e53e3e', borderColor: '#e53e3e' }}
-                          onClick={() => handleClose(fy.id, fy.yearName)}
+                          className="primary-btn" 
+                          style={{ backgroundColor: '#12b886' }}
+                          onClick={async () => {
+                            try {
+                              await api.post(`/FiscalYear/${fy.id}/start`);
+                              alert('年度を開始しました。');
+                              await fetchFiscalYears();
+                            } catch (err) {
+                              alert(`エラー: ${err.response?.data || '開始に失敗しました'}`);
+                            }
+                          }}
                         >
-                          <Lock size={16} />
-                          年度を締める
+                          年度を開始する
                         </button>
+                      )}
+                      {!fy.isClosed && fy.isActive && (
+                        <>
+                          <button 
+                            className="secondary-btn" 
+                            style={{ color: '#4c6ef5', borderColor: '#4c6ef5' }}
+                            onClick={() => handleSendAlerts(fy.id)}
+                          >
+                            締め前アラート送信
+                          </button>
+                          <button 
+                            className="secondary-btn" 
+                            style={{ color: fy.isApplicationsStopped ? '#12b886' : '#f59f00', borderColor: fy.isApplicationsStopped ? '#12b886' : '#f59f00' }}
+                            onClick={() => handleToggleApplications(fy.id)}
+                          >
+                            {fy.isApplicationsStopped ? '新規申請を再開' : '新規申請を停止'}
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

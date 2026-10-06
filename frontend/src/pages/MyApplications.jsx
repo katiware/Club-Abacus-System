@@ -17,22 +17,40 @@ function MyApplications() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
+  const [fiscalYears, setFiscalYears] = useState([]);
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
+
   useEffect(() => {
-    fetchMyApplications();
+    const fetchInitialData = async () => {
+      try {
+        const fyRes = await api.get('/FiscalYear');
+        setFiscalYears(fyRes.data);
+        const activeFy = fyRes.data.find(f => f.isActive);
+        if (activeFy) setSelectedFiscalYear(activeFy.id);
+      } catch (err) {
+        console.error('Failed to fetch fiscal years', err);
+      }
+    };
+    fetchInitialData();
   }, []);
 
-  const fetchMyApplications = async () => {
-    setIsLoading(true);
-    try {
-      const response = await api.get('/Expense/me');
-      setApplications(response.data);
-    } catch (err) {
-      console.error('Failed to fetch applications', err);
-      setError('申請履歴の取得に失敗しました。');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  useEffect(() => {
+    const fetchMyApplications = async () => {
+      setIsLoading(true);
+      try {
+        const url = selectedFiscalYear ? `/Expense/me?fiscalYearId=${selectedFiscalYear}` : '/Expense/me';
+        const response = await api.get(url);
+        setApplications(response.data);
+      } catch (err) {
+        console.error('Failed to fetch applications', err);
+        setError('申請履歴の取得に失敗しました。');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchMyApplications();
+  }, [selectedFiscalYear]);
 
   const openUploadModal = (app) => {
     setUploadingApp(app);
@@ -149,6 +167,22 @@ function MyApplications() {
       <PageHeader title="申請履歴・証憑提出" backTo="/top" />
 
       <main className="my-apps-content">
+        <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+          <div className="filter-dropdown" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'white', padding: '8px 12px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+            <span style={{ fontSize: '0.9rem', color: '#6c757d', fontWeight: '500' }}>年度:</span>
+            <select 
+              value={selectedFiscalYear} 
+              onChange={(e) => setSelectedFiscalYear(e.target.value)}
+              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '1rem', fontWeight: '500', color: '#343a40', cursor: 'pointer' }}
+            >
+              <option value="">すべての年度</option>
+              {fiscalYears.map(fy => (
+                <option key={fy.id} value={fy.id}>{fy.yearName}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {error && <div className="p-4 text-red-500 text-center">{error}</div>}
         
         {isLoading ? (
