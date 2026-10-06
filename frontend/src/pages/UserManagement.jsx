@@ -53,10 +53,10 @@ function UserManagement() {
     e.preventDefault();
     setEditError(null);
     try {
-      await api.put(`/User/${editUser.id}`, { roleId: editUser.roleId, isActive: editUser.isActive });
+      await api.put(`/User/${editUser.id}`, { roleId: editUser.roleId, isActive: editUser.isActive, studentId: editUser.studentId, enrollmentYear: editUser.enrollmentYear });
       
       const role = roles.find(r => r.id === editUser.roleId);
-      setUsers(users.map(u => u.id === editUser.id ? { ...u, roleId: editUser.roleId, roleName: role ? role.name : u.roleName, isActive: editUser.isActive } : u));
+      setUsers(users.map(u => u.id === editUser.id ? { ...u, roleId: editUser.roleId, roleName: role ? role.name : u.roleName, isActive: editUser.isActive, studentId: editUser.studentId, enrollmentYear: editUser.enrollmentYear } : u));
       
       setShowEditModal(false);
       setEditUser(null);
@@ -64,6 +64,33 @@ function UserManagement() {
     } catch (err) {
       console.error(err);
       setEditError(err.response?.data?.message || err.response?.data?.[0]?.description || '更新に失敗しました。');
+    }
+  };
+
+  const handlePromoteToAdmin = async (user) => {
+    const input = window.prompt(`【非常に危険な操作】\n${user.name} をシステム全体を管理できる「管理者」に昇格させようとしています。\nこの操作は元に戻せません。\n確認のため、部員の名前（${user.name}）を入力してください。`);
+    if (input === user.name) {
+      try {
+        const adminRole = roles.find(r => r.name === 'ADMIN');
+        if (!adminRole) {
+          alert('ADMINロールが見つかりません。');
+          return;
+        }
+        await api.put(`/User/${user.id}`, { roleId: adminRole.id, isActive: user.isActive, studentId: user.studentId, enrollmentYear: user.enrollmentYear });
+        
+        setUsers(users.map(u => u.id === user.id ? { ...u, roleId: adminRole.id, roleName: 'ADMIN' } : u));
+        
+        if (editUser && editUser.id === user.id) {
+          setShowEditModal(false);
+          setEditUser(null);
+        }
+        alert(`${user.name} を管理者に昇格しました。`);
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || '昇格に失敗しました。');
+      }
+    } else if (input !== null) {
+      alert('入力された名前が一致しませんでした。操作をキャンセルします。');
     }
   };
 
@@ -90,7 +117,7 @@ function UserManagement() {
       const response = await api.post('/User', newUser);
       setUsers([...users, response.data]);
       setShowAddModal(false);
-      setNewUser({ name: '', email: '', roleId: '' });
+      setNewUser({ name: '', email: '', roleId: '', studentId: '', enrollmentYear: '' });
       alert('新しい部員を追加しました！');
     } catch (err) {
       console.error(err);
@@ -102,7 +129,7 @@ function UserManagement() {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!confirm(`${file.name} をアップロードして一括登録を実行しますか？\n(※A列:学籍番号, B列:氏名, C列:メールアドレス, D列:入学年度)`)) {
+    if (!confirm(`${file.name} をアップロードして一括登録を実行しますか？\n(※大学指定の部員名簿フォーマットに対応。学籍番号からメールアドレスと入学年度を自動生成します)`)) {
       e.target.value = null;
       return;
     }
@@ -159,6 +186,8 @@ function UserManagement() {
               <tr>
                 <th>氏名</th>
                 <th>メールアドレス</th>
+                <th>学籍番号</th>
+                <th>入学年度</th>
                 <th>権限</th>
                 <th>ステータス</th>
                 <th>操作</th>
@@ -169,6 +198,8 @@ function UserManagement() {
                 <tr key={user.id} className={`table-row ${!user.isActive ? 'inactive-row' : ''}`}>
                   <td className="font-medium">{user.name}</td>
                   <td className="text-gray-500">{user.email}</td>
+                  <td className="text-gray-500">{user.studentId || '-'}</td>
+                  <td className="text-gray-500">{user.enrollmentYear ? `${user.enrollmentYear}年度` : '-'}</td>
                   <td>
                     <span 
                       className={`role-badge ${user.roleName === 'ADMIN' ? 'role-admin' : 'role-member'}`}
@@ -253,6 +284,22 @@ function UserManagement() {
                 />
               </div>
               <div className="form-group">
+                <label>学籍番号</label>
+                <input
+                  type="text"
+                  value={newUser.studentId || ''}
+                  onChange={e => setNewUser({ ...newUser, studentId: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>入学年度</label>
+                <input
+                  type="number"
+                  value={newUser.enrollmentYear || ''}
+                  onChange={e => setNewUser({ ...newUser, enrollmentYear: e.target.value ? parseInt(e.target.value) : '' })}
+                />
+              </div>
+              <div className="form-group">
                 <label>権限</label>
                 <select
                   value={newUser.roleId}
@@ -316,17 +363,49 @@ function UserManagement() {
                 />
               </div>
               <div className="form-group">
+                <label>学籍番号</label>
+                <input
+                  type="text"
+                  value={editUser.studentId || ''}
+                  onChange={e => setEditUser({ ...editUser, studentId: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label>入学年度</label>
+                <input
+                  type="number"
+                  value={editUser.enrollmentYear || ''}
+                  onChange={e => setEditUser({ ...editUser, enrollmentYear: e.target.value ? parseInt(e.target.value) : '' })}
+                />
+              </div>
+              <div className="form-group">
                 <label>権限</label>
-                <select 
-                  value={editUser.roleId || ''} 
-                  onChange={e => setEditUser({...editUser, roleId: e.target.value})} 
-                  required
-                >
-                  <option value="">選択してください</option>
-                  {roles.map(r => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
-                </select>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select 
+                    value={editUser.roleId || ''} 
+                    onChange={e => setEditUser({...editUser, roleId: e.target.value})} 
+                    required
+                    disabled={editUser.roleName === 'ADMIN'}
+                  >
+                    <option value="">選択してください</option>
+                    {roles.filter(r => r.name !== 'ADMIN').map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                  {editUser.roleName !== 'ADMIN' && (
+                    <button 
+                      type="button" 
+                      className="secondary-btn" 
+                      style={{ margin: 0, whiteSpace: 'nowrap', borderColor: '#ef4444', color: '#ef4444' }}
+                      onClick={() => handlePromoteToAdmin(editUser)}
+                    >
+                      管理者に昇格
+                    </button>
+                  )}
+                  {editUser.roleName === 'ADMIN' && (
+                    <span style={{ fontSize: '12px', color: '#6b7280' }}>※ 管理者の権限は変更できません</span>
+                  )}
+                </div>
               </div>
               <div className="form-group">
                 <label>ステータス</label>

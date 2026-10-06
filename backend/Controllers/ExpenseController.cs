@@ -176,13 +176,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         await context.SaveChangesAsync(cancellationToken);
 
-        // 商品未定フラグが立っている明細がある場合、Discordに議論用スレッドを作成する
-        if (expenseRequest.ExpenseItems.Any(i => i.IsProductUndecided))
-        {
-            await discordService.CreatePurchaseDiscussionThreadAsync(expenseRequest);
-            // サービス内でスレッドIDなどを保存した場合はもう一度Save
-            await context.SaveChangesAsync(cancellationToken);
-        }
+
 
         return CreatedAtAction(nameof(GetExpenseRequestById), new { id = expenseRequest.Id }, expenseRequest);
     }
@@ -273,7 +267,9 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             return Unauthorized("ユーザー情報が取得できません。");
         }
 
-        var expenseRequest = await context.ExpenseRequests.FindAsync(new object[] { id }, cancellationToken);
+        var expenseRequest = await context.ExpenseRequests
+            .Include(e => e.ExpenseItems)
+            .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
         if (expenseRequest == null)
         {
@@ -307,6 +303,13 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         });
 
         await context.SaveChangesAsync(cancellationToken);
+
+        // 商品未定フラグが立っている明細がある場合、Discordに通知する（提出タイミング）
+        if (expenseRequest.ExpenseItems.Any(i => i.IsProductUndecided))
+        {
+            await discordService.CreatePurchaseDiscussionThreadAsync(expenseRequest);
+        }
+
         return Ok();
     }
 

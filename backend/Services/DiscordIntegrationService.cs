@@ -28,6 +28,12 @@ public class DiscordIntegrationService(ILogger<DiscordIntegrationService> logger
                 content = $"【新規商品議論】\n申請「{request.Title}」内で商品未定の項目があります。\n部員の皆様、このスレッドで何を購入すべきかご意見をお寄せください！"
             };
 
+            // Discord API requires a User-Agent
+            if (!httpClient.DefaultRequestHeaders.UserAgent.TryParseAdd("ClubAbacusSystem/1.0"))
+            {
+                httpClient.DefaultRequestHeaders.Add("User-Agent", "ClubAbacusSystem/1.0");
+            }
+
             var response = await httpClient.PostAsJsonAsync(webhookUrl, payload);
             if (response.IsSuccessStatusCode)
             {

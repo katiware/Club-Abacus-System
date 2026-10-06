@@ -226,6 +226,12 @@ app.UseExceptionHandler(errorApp =>
 
         context.Response.StatusCode = 500;
         context.Response.ContentType = "application/json";
+        
+        // デバッグ用: エラー内容をファイルに出力
+        try {
+            System.IO.File.WriteAllText("fatal_error.txt", $"{DateTime.UtcNow}\n{exception?.ToString()}");
+        } catch {}
+
         await context.Response.WriteAsJsonAsync(new { error = "サーバー内部で予期せぬエラーが発生しました。", details = exception?.Message, stackTrace = exception?.StackTrace });
     });
 });

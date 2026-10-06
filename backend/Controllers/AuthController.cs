@@ -58,10 +58,14 @@ public class AuthController(
             return true;
         }
 
-        var adminEmail = configuration["AdminSettings:InitialAdminEmail"];
-        if (!string.IsNullOrEmpty(adminEmail) && string.Equals(email, adminEmail, StringComparison.OrdinalIgnoreCase))
+        var adminEmailsConfig = configuration["AdminSettings:InitialAdminEmail"];
+        if (!string.IsNullOrEmpty(adminEmailsConfig))
         {
-            return true;
+            var adminEmails = adminEmailsConfig.Split(',').Select(e => e.Trim());
+            if (adminEmails.Contains(email, StringComparer.OrdinalIgnoreCase))
+            {
+                return true;
+            }
         }
 
         return email.EndsWith("@hiro.kindai.ac.jp");

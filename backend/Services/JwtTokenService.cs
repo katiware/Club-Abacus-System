@@ -30,7 +30,7 @@ public class JwtTokenService : IJwtTokenService
         };
 
         // Add permissions based on role
-        if (user.Role.Name == "ADMIN")
+        if (user.Role?.Name == "ADMIN")
         {
             // 管理者はすべての権限を持つ
             var permissions = Enum.GetValues<PermissionType>();
@@ -39,7 +39,7 @@ public class JwtTokenService : IJwtTokenService
                 claims.Add(new Claim("Permission", permission.ToString()));
             }
         }
-        else if (user.Role.Name == "MANAGER")
+        else if (user.Role?.Name == "MANAGER")
         {
             // 主将会計は会計業務、マスターデータ管理、全体閲覧、自身の申請管理を持つ
             var managerPermissions = new[]
