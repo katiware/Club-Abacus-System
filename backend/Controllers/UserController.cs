@@ -269,122 +269,382 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
     }
 
     /// <summary>
-    /// Excelファイルから部員を一括登録します。
+    /// 学校名簿とフォーム回答から部員情報を同期します。
     /// </summary>
-    [HttpPost("import")]
+    [HttpPost("sync")]
     [RequirePermission(PermissionType.ManageUsers)]
-    public async Task<IActionResult> ImportUsers(IFormFile file)
+    public async Task<IActionResult> SyncUsers(IFormFile? schoolListFile, IFormFile? formListFile)
     {
-        if (file == null || file.Length == 0)
+        if ((schoolListFile == null || schoolListFile.Length == 0) &&
+            (formListFile == null || formListFile.Length == 0))
         {
             return BadRequest("ファイルが選択されていません。");
-        }
-
-        if (!file.FileName.EndsWith(".xlsx"))
-        {
-            return BadRequest("Excelファイル(.xlsx)をアップロードしてください。");
         }
 
         var userRole = await context.Roles.FirstOrDefaultAsync(r => r.Name == "USER");
         if (userRole == null) return StatusCode(500, "システムにUSERロールが存在しません。");
 
-        var importedUsers = new List<User>();
         var errors = new List<string>();
-        int rowNumber = 1;
+        int addedCount = 0;
+        int updatedCount = 0;
+        int deactivatedCount = 0;
+        int discordUpdatedCount = 0;
 
-        try
+        // 入力値の安全性・文字数チェック用ローカル関数
+        bool IsValidInput(string input, int maxLength, out string errorMessage)
         {
-            using var stream = new MemoryStream();
-            await file.CopyToAsync(stream);
-            
-            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
-            var worksheet = workbook.Worksheet(1); // 最初のシート
-            
-            var rows = worksheet.RangeUsed()?.RowsUsed();
-            if (rows == null) return BadRequest("データが見つかりません。");
-
-            bool isHeaderFound = false;
-
-            foreach (var row in rows)
+            errorMessage = "";
+            if (string.IsNullOrEmpty(input)) return true;
+            if (input.Length > maxLength)
             {
-                // ヘッダー行を探す（4列目に「学籍番号」が含まれているか）
-                if (!isHeaderFound)
+                errorMessage = $"{maxLength}文字を超えています。";
+                return false;
+            }
+            // 簡易的なXSS対策（HTMLタグの拒否）
+            if (input.Contains("<") || input.Contains(">"))
+            {
+                errorMessage = "不正な文字（< または >）が含まれています。";
+                return false;
+            }
+            return true;
+        }
+
+        // --- 1. 学校名簿の処理 (新規追加・名前更新・退部者無効化) ---
+        if (schoolListFile != null && schoolListFile.Length > 0)
+        {
+            if (!schoolListFile.FileName.EndsWith(".xlsx"))
+            {
+                return BadRequest("学校名簿はExcelファイル(.xlsx)をアップロードしてください。");
+            }
+
+            try
+            {
+                using var stream = new MemoryStream();
+                await schoolListFile.CopyToAsync(stream);
+                using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+                var worksheet = workbook.Worksheet(1);
+                var rows = worksheet.RangeUsed()?.RowsUsed();
+
+                if (rows != null)
                 {
-                    if (row.Cell(4).GetString().Contains("学籍番号"))
+                    bool isHeaderFound = false;
+                    int studentIdCol = -1;
+                    int nameCol = -1;
+                    int rowNumber = 1;
+
+                    var schoolListMembers = new Dictionary<string, string>(); // StudentId -> Name
+
+                    foreach (var row in rows)
                     {
-                        isHeaderFound = true;
+                        if (!isHeaderFound)
+                        {
+                            // ヘッダー行を探す（列名を柔軟に判定）
+                            for (int col = 1; col <= row.LastCellUsed()?.Address.ColumnNumber; col++)
+                            {
+                                var cellValue = row.Cell(col).GetString().Trim();
+                                if (cellValue.Contains("学籍番号")) studentIdCol = col;
+                                if (cellValue.Contains("氏名") || cellValue.Contains("名前")) nameCol = col;
+                            }
+
+                            if (studentIdCol != -1 && nameCol != -1)
+                            {
+                                isHeaderFound = true;
+                            }
+                            rowNumber++;
+                            continue;
+                        }
+
+                        var studentId = row.Cell(studentIdCol).GetString().Trim();
+                        var name = row.Cell(nameCol).GetString().Trim();
+
+                        if (string.IsNullOrEmpty(studentId) && string.IsNullOrEmpty(name))
+                        {
+                            rowNumber++;
+                            continue;
+                        }
+
+                        if (string.IsNullOrEmpty(studentId) || string.IsNullOrEmpty(name))
+                        {
+                            errors.Add($"学校名簿 {rowNumber}行目: 氏名または学籍番号が空です。");
+                            rowNumber++;
+                            continue;
+                        }
+
+                        // バリデーション（文字数とHTMLタグ）
+                        if (!IsValidInput(studentId, 20, out string sidErr))
+                        {
+                            errors.Add($"学校名簿 {rowNumber}行目: 学籍番号が不正です ({sidErr})");
+                            rowNumber++;
+                            continue;
+                        }
+                        if (!IsValidInput(name, 100, out string nameErr))
+                        {
+                            errors.Add($"学校名簿 {rowNumber}行目: 氏名が不正です ({nameErr})");
+                            rowNumber++;
+                            continue;
+                        }
+
+                        schoolListMembers[studentId] = name;
+                        rowNumber++;
                     }
-                    rowNumber++;
-                    continue;
-                }
 
-                var studentId = row.Cell(4).GetString().Trim();
-                var name = row.Cell(5).GetString().Trim();
+                    // DB上の現在のユーザー(ロールがUSER、または全員)を取得
+                    var allUsers = await userManager.Users
+                        .Include(u => u.Role)
+                        .Where(u => u.Role.Name == "USER") // 一般部員のみ対象
+                        .ToListAsync();
 
-                // 空行はスキップ
-                if (string.IsNullOrEmpty(studentId) && string.IsNullOrEmpty(name))
-                {
-                    rowNumber++;
-                    continue;
-                }
-
-                if (string.IsNullOrEmpty(studentId) || string.IsNullOrEmpty(name))
-                {
-                    errors.Add($"{rowNumber}行目: 氏名または学籍番号が空です。");
-                    rowNumber++;
-                    continue;
-                }
-
-                // メールアドレスを自動生成（学籍番号@hiro.kindai.ac.jp）
-                var email = $"{studentId}@hiro.kindai.ac.jp".ToLower();
-
-                // 入学年度を自動算出（学籍番号の先頭2桁を西暦の下2桁とみなす）
-                int? enrollmentYear = null;
-                if (studentId.Length >= 2 && int.TryParse(studentId.Substring(0, 2), out int yearPrefix))
-                {
-                    enrollmentYear = 2000 + yearPrefix;
-                }
-
-                var existingUser = await userManager.FindByEmailAsync(email);
-                if (existingUser != null)
-                {
-                    errors.Add($"{rowNumber}行目: 学籍番号 {studentId} (メールアドレス: {email}) は既に登録されています。");
-                }
-                else
-                {
-                    var newUser = new User
+                    // DBに存在するが名簿にいない人を無効化
+                    foreach (var user in allUsers)
                     {
-                        UserName = email,
-                        Email = email,
-                        Name = name,
-                        StudentId = studentId,
-                        EnrollmentYear = enrollmentYear,
-                        RoleId = userRole.Id,
-                        IsActive = true
-                    };
-
-                    var result = await userManager.CreateAsync(newUser);
-                    if (result.Succeeded)
-                    {
-                        await userManager.AddToRoleAsync(newUser, "USER");
-                        importedUsers.Add(newUser);
+                        if (user.IsActive && !schoolListMembers.ContainsKey(user.StudentId))
+                        {
+                            try
+                            {
+                                user.IsActive = false;
+                                user.UpdatedAt = DateTime.UtcNow;
+                                await userManager.UpdateAsync(user);
+                                deactivatedCount++;
+                            }
+                            catch (Exception ex)
+                            {
+                                errors.Add($"ユーザーの無効化に失敗しました (学籍番号: {user.StudentId}): {ex.Message}");
+                            }
+                        }
                     }
-                    else
+
+                    // 名簿にいる人の追加・更新
+                    foreach (var kvp in schoolListMembers)
                     {
-                        errors.Add($"{rowNumber}行目: 登録に失敗しました。{string.Join(", ", result.Errors.Select(e => e.Description))}");
+                        var studentId = kvp.Key;
+                        var name = kvp.Value;
+                        
+                        try
+                        {
+                            var email = $"{studentId}@hiro.kindai.ac.jp".ToLower();
+                            var existingUser = allUsers.FirstOrDefault(u => u.StudentId == studentId);
+                            
+                            if (existingUser == null)
+                            {
+                                // 新規追加
+                                int? enrollmentYear = null;
+                                if (studentId.Length >= 2 && int.TryParse(studentId.Substring(0, 2), out int yearPrefix))
+                                {
+                                    enrollmentYear = 2000 + yearPrefix;
+                                }
+
+                                var newUser = new User
+                                {
+                                    UserName = email,
+                                    Email = email,
+                                    Name = name,
+                                    StudentId = studentId,
+                                    EnrollmentYear = enrollmentYear,
+                                    RoleId = userRole.Id,
+                                    IsActive = true,
+                                    CreatedAt = DateTime.UtcNow,
+                                    UpdatedAt = DateTime.UtcNow
+                                };
+
+                                var result = await userManager.CreateAsync(newUser);
+                                if (result.Succeeded)
+                                {
+                                    await userManager.AddToRoleAsync(newUser, "USER");
+                                    addedCount++;
+                                    allUsers.Add(newUser); 
+                                }
+                                else
+                                {
+                                    errors.Add($"学校名簿 学籍番号 {studentId} の登録に失敗: {string.Join(", ", result.Errors.Select(e => e.Description))}");
+                                }
+                            }
+                            else
+                            {
+                                // 既存ユーザーの更新
+                                bool isUpdated = false;
+                                if (existingUser.Name != name)
+                                {
+                                    existingUser.Name = name;
+                                    isUpdated = true;
+                                }
+                                if (!existingUser.IsActive)
+                                {
+                                    existingUser.IsActive = true;
+                                    isUpdated = true;
+                                }
+
+                                if (isUpdated)
+                                {
+                                    existingUser.UpdatedAt = DateTime.UtcNow;
+                                    await userManager.UpdateAsync(existingUser);
+                                    updatedCount++;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            errors.Add($"学校名簿のユーザー処理中にエラーが発生しました (学籍番号: {studentId}): {ex.Message}");
+                        }
                     }
                 }
-                rowNumber++;
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"学校名簿のファイル読み込み中にエラーが発生しました: {ex.Message}");
             }
         }
-        catch (Exception ex)
+
+        // --- 2. フォーム回答の処理 (Discord IDの更新) ---
+        if (formListFile != null && formListFile.Length > 0)
         {
-            return StatusCode(500, $"ファイルの読み込み中にエラーが発生しました: {ex.Message}");
+            if (!formListFile.FileName.EndsWith(".xlsx") && !formListFile.FileName.EndsWith(".csv"))
+            {
+                return BadRequest("フォーム回答はExcelファイル(.xlsx)またはCSVファイル(.csv)をアップロードしてください。");
+            }
+
+            try
+            {
+                using var stream = new MemoryStream();
+                await formListFile.CopyToAsync(stream);
+                stream.Position = 0;
+
+                var formMembers = new Dictionary<string, string>(); // StudentId -> DiscordId
+
+                if (formListFile.FileName.EndsWith(".xlsx"))
+                {
+                    using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+                    var worksheet = workbook.Worksheet(1);
+                    var rows = worksheet.RangeUsed()?.RowsUsed();
+
+                    if (rows != null)
+                    {
+                        bool isHeaderFound = false;
+                        int studentIdCol = -1;
+                        int discordCol = -1;
+
+                        foreach (var row in rows)
+                        {
+                            if (!isHeaderFound)
+                            {
+                                for (int col = 1; col <= row.LastCellUsed()?.Address.ColumnNumber; col++)
+                                {
+                                    var cellValue = row.Cell(col).GetString().Trim();
+                                    if (cellValue.Contains("学籍番号")) studentIdCol = col;
+                                    if (cellValue.Contains("Discord", StringComparison.OrdinalIgnoreCase)) discordCol = col;
+                                }
+
+                                if (studentIdCol != -1 && discordCol != -1)
+                                {
+                                    isHeaderFound = true;
+                                }
+                                continue;
+                            }
+
+                            var studentId = row.Cell(studentIdCol).GetString().Trim();
+                            var discordId = row.Cell(discordCol).GetString().Trim();
+
+                            if (!string.IsNullOrEmpty(studentId) && !string.IsNullOrEmpty(discordId))
+                            {
+                                if (!IsValidInput(studentId, 20, out _) || !IsValidInput(discordId, 100, out string discordErr))
+                                {
+                                    errors.Add($"フォーム回答 (Excel) 学籍番号 {studentId} のデータをスキップしました: {discordErr}");
+                                }
+                                else
+                                {
+                                    formMembers[studentId] = discordId;
+                                }
+                            }
+                        }
+                    }
+                }
+                else if (formListFile.FileName.EndsWith(".csv"))
+                {
+                    // CSVパース
+                    using var reader = new StreamReader(stream);
+                    bool isHeaderFound = false;
+                    int studentIdCol = -1;
+                    int discordCol = -1;
+                    int rowNum = 1;
+
+                    while (!reader.EndOfStream)
+                    {
+                        var line = await reader.ReadLineAsync();
+                        rowNum++;
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+
+                        var values = line.Split(',');
+
+                        if (!isHeaderFound)
+                        {
+                            for (int col = 0; col < values.Length; col++)
+                            {
+                                var cellValue = values[col].Trim('\"', ' ');
+                                if (cellValue.Contains("学籍番号")) studentIdCol = col;
+                                if (cellValue.Contains("Discord", StringComparison.OrdinalIgnoreCase)) discordCol = col;
+                            }
+                            if (studentIdCol != -1 && discordCol != -1)
+                            {
+                                isHeaderFound = true;
+                            }
+                            continue;
+                        }
+
+                        if (studentIdCol != -1 && discordCol != -1 && studentIdCol < values.Length && discordCol < values.Length)
+                        {
+                            var studentId = values[studentIdCol].Trim('\"', ' ');
+                            var discordId = values[discordCol].Trim('\"', ' ');
+                            if (!string.IsNullOrEmpty(studentId) && !string.IsNullOrEmpty(discordId))
+                            {
+                                if (!IsValidInput(studentId, 20, out _) || !IsValidInput(discordId, 100, out string discordErr))
+                                {
+                                    errors.Add($"フォーム回答 (CSV) 学籍番号 {studentId} のデータをスキップしました: {discordErr}");
+                                }
+                                else
+                                {
+                                    formMembers[studentId] = discordId;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Discord IDの更新
+                var allUsers = await userManager.Users.ToListAsync();
+                foreach (var kvp in formMembers)
+                {
+                    var studentId = kvp.Key;
+                    var discordId = kvp.Value;
+
+                    try
+                    {
+                        var user = allUsers.FirstOrDefault(u => u.StudentId == studentId);
+                        if (user != null && user.DiscordId != discordId)
+                        {
+                            user.DiscordId = discordId;
+                            user.UpdatedAt = DateTime.UtcNow;
+                            await userManager.UpdateAsync(user);
+                            discordUpdatedCount++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Discord IDの更新中にエラーが発生しました (学籍番号: {studentId}): {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"フォーム回答のファイル読み込み中にエラーが発生しました: {ex.Message}");
+            }
         }
 
         return Ok(new
         {
-            Message = $"{importedUsers.Count} 人のユーザーをインポートしました。",
+            Message = "同期処理が終了しました。",
+            Added = addedCount,
+            Updated = updatedCount,
+            Deactivated = deactivatedCount,
+            DiscordUpdated = discordUpdatedCount,
             Errors = errors
         });
     }
