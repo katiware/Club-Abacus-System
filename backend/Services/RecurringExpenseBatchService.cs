@@ -147,8 +147,8 @@ public class RecurringExpenseBatchService : BackgroundService
 
             // 当該年度に属する未完了の申請を自動却下
             var pendingRequests = await dbContext.ExpenseRequests
-                .Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue) &&
-                            e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue) &&
+                .Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) &&
+                            e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc) &&
                             e.Status != ExpenseStatus.Settled &&
                             e.Status != ExpenseStatus.UniversitySubmitted &&
                             e.Status != ExpenseStatus.Rejected)

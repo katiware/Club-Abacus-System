@@ -9,6 +9,7 @@ using Club_Abacus_System.DTOs.System;
 using Club_Abacus_System.DTOs.Users;
 using Club_Abacus_System.Models;
 using Club_Abacus_System.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -93,10 +94,10 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
     }
 
     /// <summary>
-    /// 年度情報（名称・予算）を更新します。
+    /// 年度情報（名称・予算・期間）を更新します（システム管理者専用の保険措置）。
     /// </summary>
     [HttpPut("{id}")]
-    [RequirePermission(PermissionType.ManageMasterData)]
+    [Authorize(Roles = "ADMIN")]
     public async Task<IActionResult> UpdateFiscalYear(Guid id, [FromBody] FiscalYearUpdateDto dto)
     {
         var fiscalYear = await context.FiscalYears.FindAsync(id);
@@ -106,20 +107,38 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
             return NotFound("指定された年度は見つかりません。");
         }
 
-        if (fiscalYear.IsClosed)
+        var newStartDate = dto.StartDate ?? fiscalYear.StartDate;
+        var newEndDate = dto.EndDate ?? fiscalYear.EndDate;
+
+        if (newEndDate <= newStartDate)
         {
-            return BadRequest("締め済みの年度は変更できません。");
+            return BadRequest("終了日は開始日より後に設定してください。");
+        }
+
+        // 期間が変更された場合、他年度との重複チェック
+        if (dto.StartDate.HasValue || dto.EndDate.HasValue)
+        {
+            var overlapping = await context.FiscalYears.AnyAsync(f =>
+                f.Id != id &&
+                f.StartDate <= newEndDate && f.EndDate >= newStartDate);
+
+            if (overlapping)
+            {
+                return BadRequest("指定した期間は既存の他年度と重複しています。");
+            }
         }
 
         if (dto.YearName != null) fiscalYear.YearName = dto.YearName;
         if (dto.TotalBudget.HasValue) fiscalYear.TotalBudget = dto.TotalBudget.Value;
-
-        await context.SaveChangesAsync();
+        if (dto.StartDate.HasValue) fiscalYear.StartDate = dto.StartDate.Value;
+        if (dto.EndDate.HasValue) fiscalYear.EndDate = dto.EndDate.Value;
+        if (dto.IsActive.HasValue) fiscalYear.IsActive = dto.IsActive.Value;
+        if (dto.IsClosed.HasValue) fiscalYear.IsClosed = dto.IsClosed.Value;
 
         fiscalYear.UpdatedAt = DateTime.UtcNow;
         await context.SaveChangesAsync();
 
-        return NoContent();
+        return Ok(fiscalYear);
     }
 
     /// <summary>
@@ -212,8 +231,8 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
         // 未完了の申請を検索 (Settled, Rejected, UniversitySubmitted 以外)
         var pendingRequests = await context.ExpenseRequests
             .Where(e => e.Status != ExpenseStatus.Settled && e.Status != ExpenseStatus.Rejected && e.Status != ExpenseStatus.UniversitySubmitted)
-            .Where(e => e.CreatedAt >= fiscalYear.StartDate.ToDateTime(TimeOnly.MinValue) && 
-                        e.CreatedAt <= fiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue))
+            .Where(e => e.CreatedAt >= fiscalYear.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) && 
+                        e.CreatedAt <= fiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc))
             .ToListAsync();
 
         if (pendingRequests.Any() && !force)
@@ -239,6 +258,74 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
         fiscalYear.IsClosed = true;
         fiscalYear.UpdatedAt = DateTime.UtcNow;
 
+        await context.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    /// <summary>
+    /// 誤って開始した年度を「未開始」ステータスに戻します（システム管理者専用の保険措置）。
+    /// </summary>
+    [HttpPost("{id}/stop")]
+    [Authorize(Roles = "ADMIN")]
+    public async Task<IActionResult> StopFiscalYear(Guid id)
+    {
+        var fiscalYear = await context.FiscalYears.FindAsync(id);
+
+        if (fiscalYear == null)
+        {
+            return NotFound("指定された年度は見つかりません。");
+        }
+
+        if (!fiscalYear.IsActive)
+        {
+            return BadRequest("この年度は進行中ではありません。");
+        }
+
+        fiscalYear.IsActive = false;
+        fiscalYear.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        return Ok(fiscalYear);
+    }
+
+    /// <summary>
+    /// 年度の締め解除は規程上基本的に禁止されています。
+    /// </summary>
+    [HttpPost("{id}/reopen")]
+    [Authorize(Roles = "ADMIN")]
+    public Task<IActionResult> ReopenFiscalYear(Guid id, [FromQuery] bool makeActive = true)
+    {
+        return Task.FromResult<IActionResult>(BadRequest("年度の締め解除は会計監査・規程上、原則として禁止されています。締められた過去年度を再オープンすることはできません。"));
+    }
+
+    /// <summary>
+    /// 誤って作成した年度を削除します（システム管理者専用の保険措置。期間内の申請が存在しない場合のみ可能）。
+    /// </summary>
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "ADMIN")]
+    public async Task<IActionResult> DeleteFiscalYear(Guid id, [FromQuery] bool force = false)
+    {
+        var fiscalYear = await context.FiscalYears.FindAsync(id);
+
+        if (fiscalYear == null)
+        {
+            return NotFound("指定された年度は見つかりません。");
+        }
+
+        var startDateTime = fiscalYear.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+        var endDateTime = fiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+
+        var hasRequests = await context.ExpenseRequests
+            .AnyAsync(e => e.CreatedAt >= startDateTime && e.CreatedAt <= endDateTime);
+
+        if (hasRequests && !force)
+        {
+            return BadRequest("この年度の期間内に申請データが存在するため削除できません。");
+        }
+
+        context.FiscalYears.Remove(fiscalYear);
         await context.SaveChangesAsync();
 
         return NoContent();

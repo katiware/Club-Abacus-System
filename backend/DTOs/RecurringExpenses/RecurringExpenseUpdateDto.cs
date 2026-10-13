@@ -30,4 +30,10 @@ public class RecurringExpenseUpdateDto
     public string? PurchaseUrl { get; set; }
 
     public DateOnly? NextGenerationDate { get; set; }
+
+    public RecurringFrequency? RecurringFrequency { get; set; }
+
+    public ExpenseType? ExpenseType { get; set; }
+
+    public ReceiptType? ReceiptType { get; set; }
 }

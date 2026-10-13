@@ -19,10 +19,11 @@ public enum ExpenseStatus
     Remanded = 15,            // REMANDED: 差し戻し中（管理者による修正依頼）
     PendingApproval = 20,     // PENDING_APPROVAL: 承認待ち（部員が申請提出）
     Approved = 30,            // 事前承認済（立替:購入待ち / 事前出金:現金渡し待ち）
-    WaitingConfirmation = 40, // 領収書確認待ち（会計によるチェック待ち）
-    UniversitySubmitted = 50, // 大学へ申請完了（UNIPA提出済）
-    Settled = 60,             // 精算完了（立替:現金手渡し済 / 事前出金:お釣り回収済など）
-    Rejected = 99,            // REJECTED: 却下
+    WaitingConfirmation = 40,         // 領収書確認待ち（会計によるチェック待ち）
+    WaitingUniversitySubmission = 45, // 大学へ提出待ち（証憑確認完了・UNIPA提出待ち）
+    UniversitySubmitted = 50,         // 大学へ申請完了（UNIPA提出済）
+    Settled = 60,                     // 精算完了（立替:現金手渡し済 / 事前出金:お釣り回収済など）
+    Rejected = 99,                    // REJECTED: 却下
 
     // --- 事前出金フロー専用 ---
     Advance_MoneyHandedOver = 35 // 事前出金渡し済（部員へ現金手渡し済。購入・領収書提出待ち）

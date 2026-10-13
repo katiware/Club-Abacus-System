@@ -131,12 +131,15 @@ function MyApplications() {
           ? <span className="status-badge" style={{backgroundColor: '#fef08a', color: '#854d0e', border: '1px solid #fde047'}}><Clock size={14} /> 再承認待(変更あり)</span>
           : <span className="status-badge pending"><Clock size={14} /> 承認待ち</span>;
       case 'Approved':
+        return <span className="status-badge approved"><CheckCircle size={14} /> 事前承認済</span>;
       case 'Advance_MoneyHandedOver':
-        return <span className="status-badge approved"><CheckCircle size={14} /> 承認済（証憑提出待ち）</span>;
+        return <span className="status-badge" style={{backgroundColor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd'}}><CheckCircle size={14} /> 事前出金渡し済</span>;
       case 'WaitingConfirmation':
-        return <span className="status-badge waiting"><Clock size={14} /> 最終確認待ち</span>;
+        return <span className="status-badge waiting"><Clock size={14} /> 領収書確認待ち</span>;
+      case 'WaitingUniversitySubmission':
+        return <span className="status-badge" style={{backgroundColor: '#ede9fe', color: '#6d28d9', border: '1px solid #ddd6fe'}}><Clock size={14} /> 大学へ提出待ち</span>;
       case 'UniversitySubmitted':
-        return <span className="status-badge"><Clock size={14} /> 大学へ提出済</span>;
+        return <span className="status-badge" style={{backgroundColor: '#dbeafe', color: '#1d4ed8'}}><Clock size={14} /> 大学へ提出済</span>;
       case 'Settled':
         return <span className="status-badge completed"><CheckCircle size={14} /> 完了</span>;
       case 'Rejected':

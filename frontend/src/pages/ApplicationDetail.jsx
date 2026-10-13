@@ -380,9 +380,10 @@ function ApplicationDetail() {
           ? <span className="detail-status" style={{backgroundColor: '#fef08a', color: '#854d0e', border: '1px solid #fde047'}}><Clock size={16}/> 再承認待 (変更あり)</span>
           : <span className="detail-status status-pending"><Clock size={16}/> 承認待ち</span>;
       case 'Approved': return <span className="detail-status status-waiting"><CheckCircle size={16}/> 事前承認済</span>;
-      case 'Advance_MoneyHandedOver': return <span className="detail-status status-waiting"><CheckCircle size={16}/> 承認済(手渡し済)</span>;
-      case 'WaitingConfirmation': return <span className="detail-status status-waiting"><Clock size={16}/> 最終確認待</span>;
-      case 'UniversitySubmitted': return <span className="detail-status status-completed">大学へ提出済</span>;
+      case 'Advance_MoneyHandedOver': return <span className="detail-status" style={{backgroundColor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd'}}><CheckCircle size={16}/> 事前出金渡し済</span>;
+      case 'WaitingConfirmation': return <span className="detail-status status-waiting"><Clock size={16}/> 領収書確認待ち</span>;
+      case 'WaitingUniversitySubmission': return <span className="detail-status" style={{backgroundColor: '#ede9fe', color: '#6d28d9', border: '1px solid #ddd6fe'}}><Clock size={16}/> 大学へ提出待ち</span>;
+      case 'UniversitySubmitted': return <span className="detail-status status-completed"><Clock size={16}/> 大学へ提出済</span>;
       case 'Settled': return <span className="detail-status status-completed"><CheckCircle size={16}/> 精算完了</span>;
       case 'Rejected': return <span className="detail-status bg-red-100 text-red-800"><AlertCircle size={16}/> 却下</span>;
       case 'Remanded': return <span className="detail-status status-remanded"><AlertCircle size={16}/> 差し戻し中</span>;
@@ -531,48 +532,103 @@ function ApplicationDetail() {
             </div>
 
             <div className="action-buttons-row mt-6">
-              {userRole === 'ADMIN' && (
+              {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
                 <>
                   {app.status === 'PendingApproval' && (
-                    <button className="btn-approve" onClick={() => setShowReviewModal(true)} style={{ backgroundColor: '#2563eb', padding: '12px 24px', fontSize: '1.05rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                      <CheckCircle size={20} style={{marginRight: '8px'}} />
-                      購入可否の判定（事前承認）へ進む
-                    </button>
+                    app.userId === currentUserId ? (
+                      <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', padding: '12px 16px', borderRadius: '8px', color: '#92400e', width: '100%', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Clock size={18} />
+                        <span>※ご自身の申請です。規程上、自己承認はできません（他の役員またはシステム管理者が承認します）。</span>
+                      </div>
+                    ) : (
+                      <button className="btn-approve" onClick={() => setShowReviewModal(true)} style={{ backgroundColor: '#2563eb', padding: '12px 24px', fontSize: '1.05rem', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+                        <CheckCircle size={20} style={{marginRight: '8px'}} />
+                        購入可否の判定（事前承認・差し戻し・却下）へ進む
+                      </button>
+                    )
                   )}
 
                   {app.status === 'Approved' && app.type === 'Advance' && (
-                    <button className="btn-approve" onClick={() => handleAction('Advance_MoneyHandedOver')}>
+                    <button className="btn-approve" onClick={() => handleAction('Advance_MoneyHandedOver')} style={{ backgroundColor: '#0284c7', padding: '12px 24px' }}>
                       <CheckCircle size={18} />
-                      現金を渡し済にする (手渡し)
+                      現金を渡し済にする (部員へ事前出金の手渡し)
                     </button>
                   )}
 
                   {app.status === 'Approved' && app.type === 'Reimbursement' && (
-                    <button className="btn-approve" onClick={() => handleAction('UniversitySubmitted')}>
-                      <CheckCircle size={18} />
-                      大学へ申請済にする
-                    </button>
-                  )}
-
-                  {app.status === 'UniversitySubmitted' && (
-                    <button className="btn-approve" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ backgroundColor: '#4f46e5', padding: '12px 24px', width: '100%' }}>
-                      <FileText size={18} />
-                      証憑と最終金額を確認して精算する
-                    </button>
+                    <>
+                      {app.receiptType !== 'Paper' && (!app.expenseDocuments || app.expenseDocuments.length === 0) ? (
+                        <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', padding: '12px 16px', borderRadius: '8px', color: '#1e40af', width: '100%', fontSize: '0.9rem' }}>
+                          <Clock size={16} style={{ display: 'inline', marginRight: '6px' }} />
+                          事前承認済みです。部員による領収書データのアップロードを待っています。
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                          <button className="btn-approve" onClick={() => handleAction('UniversitySubmitted')} style={{ flex: 1, backgroundColor: '#2563eb' }}>
+                            <CheckCircle size={18} />
+                            大学へ申請済にする
+                          </button>
+                          <button className="secondary-btn" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ flex: 1 }}>
+                            <FileText size={18} />
+                            証憑と金額を確認
+                          </button>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {app.status === 'Advance_MoneyHandedOver' && (
-                    <button className="btn-approve" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ backgroundColor: '#4f46e5', padding: '12px 24px', width: '100%' }}>
-                      <FileText size={18} />
-                      証憑と最終金額を確認して精算する
-                    </button>
+                    <>
+                      {(!app.expenseDocuments || app.expenseDocuments.length === 0) && app.receiptType !== 'Paper' ? (
+                        <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', padding: '12px 16px', borderRadius: '8px', color: '#1e40af', width: '100%', fontSize: '0.9rem' }}>
+                          <Clock size={16} style={{ display: 'inline', marginRight: '6px' }} />
+                          現金手渡し完了。部員による買い物完了と領収書提出を待っています。
+                        </div>
+                      ) : (
+                        <button className="btn-approve" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ backgroundColor: '#4f46e5', padding: '12px 24px', width: '100%' }}>
+                          <FileText size={18} />
+                          領収書・最終実費を確認して精算する
+                        </button>
+                      )}
+                    </>
                   )}
                   
                   {app.status === 'WaitingConfirmation' && (
-                    <button className="btn-approve" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ backgroundColor: '#4f46e5', padding: '12px 24px', width: '100%' }}>
-                      <FileText size={18} />
-                      証憑と最終金額を確認して精算する
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                      <button className="btn-approve" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ flex: 1, backgroundColor: '#4f46e5', padding: '12px 24px' }}>
+                        <FileText size={18} />
+                        証憑・金額を照合して確認へ進む
+                      </button>
+                    </div>
+                  )}
+
+                  {app.status === 'WaitingUniversitySubmission' && (
+                    <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                      <button className="btn-approve" onClick={() => handleAction('UniversitySubmitted')} style={{ flex: 1, backgroundColor: '#2563eb', padding: '12px 24px' }}>
+                        <Send size={18} />
+                        大学へ申請済にする (UNIPA提出完了)
+                      </button>
+                      <button className="secondary-btn" onClick={() => navigate(`/admin/verify/${app.id}`)} style={{ flex: 1 }}>
+                        <FileText size={18} />
+                        証憑・金額を再確認
+                      </button>
+                    </div>
+                  )}
+
+                  {app.status === 'UniversitySubmitted' && (
+                    <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                      <button className="btn-approve" onClick={() => handleAction('Settled')} style={{ flex: 1, backgroundColor: '#10b981', padding: '12px 24px' }}>
+                        <CheckCircle size={18} />
+                        精算完了にする {app.type === 'Reimbursement' ? '(立替金返金済)' : '(帳簿処理完了)'}
+                      </button>
+                    </div>
+                  )}
+
+                  {app.status === 'Settled' && (
+                    <div style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0', padding: '12px 16px', borderRadius: '8px', color: '#065f46', width: '100%', fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <CheckCircle size={18} />
+                      この経費申請は精算完了（帳簿処理済）です。
+                    </div>
                   )}
                 </>
               )}
