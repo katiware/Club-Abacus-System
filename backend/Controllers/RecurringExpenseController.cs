@@ -68,6 +68,12 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
             return BadRequest("指定されたユーザーは存在しません。");
         }
 
+        // Web購入(Digital)の場合、購入先URLは必須
+        if (dto.ReceiptType == ReceiptType.Digital && string.IsNullOrWhiteSpace(dto.PurchaseUrl))
+        {
+            return BadRequest("Web購入(Digital)を選択した場合、購入先・サービスURLは必須です。");
+        }
+
         var template = new RecurringExpenseTemplate
         {
             UserId = dto.UserId,
@@ -109,6 +115,13 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
             return NotFound("指定されたテンプレートは見つかりません。");
         }
 
+        var effectiveReceiptType = dto.ReceiptType ?? template.ReceiptType;
+        var effectiveUrl = dto.PurchaseUrl ?? template.PurchaseUrl;
+        if (effectiveReceiptType == ReceiptType.Digital && string.IsNullOrWhiteSpace(effectiveUrl))
+        {
+            return BadRequest("Web購入(Digital)を選択した場合、購入先・サービスURLは必須です。");
+        }
+
         if (dto.TemplateName != null) template.TemplateName = dto.TemplateName;
         if (dto.TemplateStatus.HasValue) template.TemplateStatus = dto.TemplateStatus.Value;
         if (dto.ItemName != null) template.ItemName = dto.ItemName;
@@ -119,6 +132,9 @@ public class RecurringExpenseController(AppDbContext context) : ControllerBase
         if (dto.Description != null) template.Description = dto.Description;
         if (dto.PurchaseUrl != null) template.PurchaseUrl = dto.PurchaseUrl;
         if (dto.NextGenerationDate.HasValue) template.NextGenerationDate = dto.NextGenerationDate.Value;
+        if (dto.RecurringFrequency.HasValue) template.RecurringFrequency = dto.RecurringFrequency.Value;
+        if (dto.ExpenseType.HasValue) template.ExpenseType = dto.ExpenseType.Value;
+        if (dto.ReceiptType.HasValue) template.ReceiptType = dto.ReceiptType.Value;
 
         await context.SaveChangesAsync();
 

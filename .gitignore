@@ -86,4 +86,8 @@ docs/ai_rules_local.md
 docs/★★①令和8年度 課外活動育成費(部費)マニュアル202512.pdf
 
 # Uploaded Files
-[Uu]ploads/
+[Uu]ploads/
+
+# Development only files
+backend/Controllers/DevDataController.cs
+

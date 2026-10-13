@@ -18,7 +18,20 @@ const AuthService = {
 
   isAuthenticated: () => {
     return !!localStorage.getItem('authToken');
+  },
+
+  quickLogin: async (emailOrRole) => {
+    const isEmail = emailOrRole.includes('@');
+    const param = isEmail ? `email=${encodeURIComponent(emailOrRole)}` : `role=${encodeURIComponent(emailOrRole)}`;
+    const response = await api.post(`/DevData/quick-login?${param}`);
+    return response.data;
+  },
+
+  seedDevData: async () => {
+    const response = await api.post('/DevData/seed');
+    return response.data;
   }
 };
 
 export default AuthService;
+

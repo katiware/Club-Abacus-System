@@ -20,8 +20,9 @@ function Admin() {
         app.status === 'PendingApproval' || 
         app.status === 'Approved' ||
         app.status === 'Advance_MoneyHandedOver' ||
-        app.status === 'UniversitySubmitted' ||
-        app.status === 'WaitingConfirmation'
+        app.status === 'WaitingConfirmation' ||
+        app.status === 'WaitingUniversitySubmission' ||
+        app.status === 'UniversitySubmitted'
       );
       setApplications(pendingTasks);
     } catch (err) {
@@ -42,9 +43,10 @@ function Admin() {
     switch (status) {
       case 'PendingApproval': return <span style={{ color: '#e65100', fontWeight: 'bold' }}>承認待ち</span>;
       case 'Approved': return <span style={{ color: '#1565c0', fontWeight: 'bold' }}>事前承認済</span>;
-      case 'Advance_MoneyHandedOver': return <span style={{ color: '#1565c0', fontWeight: 'bold' }}>承認済(手渡し済)</span>;
-      case 'UniversitySubmitted': return <span style={{ color: '#1565c0', fontWeight: 'bold' }}>大学へ提出済</span>;
-      case 'WaitingConfirmation': return <span style={{ color: '#1565c0', fontWeight: 'bold' }}>最終確認待</span>;
+      case 'Advance_MoneyHandedOver': return <span style={{ color: '#0369a1', fontWeight: 'bold' }}>事前出金渡し済</span>;
+      case 'WaitingConfirmation': return <span style={{ color: '#b45309', fontWeight: 'bold' }}>領収書確認待ち</span>;
+      case 'WaitingUniversitySubmission': return <span style={{ color: '#6d28d9', fontWeight: 'bold' }}>大学へ提出待ち</span>;
+      case 'UniversitySubmitted': return <span style={{ color: '#1d4ed8', fontWeight: 'bold' }}>大学へ提出済</span>;
       default: return status;
     }
   };

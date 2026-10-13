@@ -1,49 +1,93 @@
 using System.IO.Compression;
+using Club_Abacus_System.Data;
 using Club_Abacus_System.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Club_Abacus_System.Services;
 
-public class DocumentExportService(IExpenseDocumentService expenseDocumentService) : IDocumentExportService
+public class DocumentExportService(IExpenseDocumentService expenseDocumentService, AppDbContext context) : IDocumentExportService
 {
     public async Task<Stream> ExportDocumentsToZipAsync(Guid requestId, Guid currentUserId, bool hasAdminAccess)
     {
-        // 1. 対象の申請に紐づく証憑情報を全て取得
-        var documents = await expenseDocumentService.GetDocumentsAsync(requestId, currentUserId, hasAdminAccess);
-        
-        if (!documents.Any())
+        return await ExportMultipleDocumentsToZipAsync(new[] { requestId }, currentUserId, hasAdminAccess);
+    }
+
+    public async Task<Stream> ExportMultipleDocumentsToZipAsync(IEnumerable<Guid> requestIds, Guid currentUserId, bool hasAdminAccess)
+    {
+        var requestIdList = requestIds.Distinct().ToList();
+        if (!requestIdList.Any())
         {
-            throw new KeyNotFoundException("対象の証憑ファイルが見つかりません。");
+            throw new ArgumentException("エクスポート対象の申請IDが指定されていません。");
         }
 
-        // 2. 将来的なGoogle Drive連携（あるいは別用途）も考慮し、
-        // いったんメモリストリームとしてZIPデータを構築する
-        var memoryStream = new MemoryStream();
+        var requestsQuery = context.ExpenseRequests
+            .Include(e => e.User)
+            .Include(e => e.ExpenseDocuments)
+            .Where(e => requestIdList.Contains(e.Id));
 
-        // leaveOpen: true を指定することで、ZipArchiveをDisposeしてもmemoryStreamは開いたままにする
+        if (!hasAdminAccess)
+        {
+            requestsQuery = requestsQuery.Where(e => e.UserId == currentUserId);
+        }
+
+        var requests = await requestsQuery.ToListAsync();
+        if (!requests.Any())
+        {
+            throw new KeyNotFoundException("対象の申請が見つかりません。");
+        }
+
+        var memoryStream = new MemoryStream();
+        bool hasAnyFile = false;
+
         using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
         {
-            foreach (var doc in documents)
+            int index = 1;
+            foreach (var req in requests)
             {
-                // 各ファイルのストリームを取得
-                var (fileStream, _, fileName) = await expenseDocumentService.GetDocumentFileAsync(requestId, doc.Id, currentUserId, hasAdminAccess);
+                var activeDocs = req.ExpenseDocuments.Where(d => d.DeletedAt == null).ToList();
+                if (!activeDocs.Any()) continue;
 
-                using (fileStream)
+                var safeTitle = string.Join("_", req.Title.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+                if (string.IsNullOrWhiteSpace(safeTitle)) safeTitle = "申請";
+                var safeUserName = string.Join("_", (req.User?.Name ?? "部員").Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+
+                string baseFolder = requests.Count > 1 
+                    ? $"{index:D2}_{safeUserName}_{safeTitle}" 
+                    : "";
+
+                foreach (var doc in activeDocs)
                 {
-                    // 項目（DocumentType）ごとのフォルダ名を取得
-                    var folderName = GetFolderNameByDocumentType(doc.DocumentType);
-                    var entryName = $"{folderName}/{fileName}";
-                    
-                    // ZIP内にエントリ（ファイル）を作成し、データを書き込む
-                    var entry = archive.CreateEntry(entryName);
-                    using var entryStream = entry.Open();
-                    await fileStream.CopyToAsync(entryStream);
+                    try
+                    {
+                        var (fileStream, _, fileName) = await expenseDocumentService.GetDocumentFileAsync(req.Id, doc.Id, currentUserId, hasAdminAccess);
+                        using (fileStream)
+                        {
+                            var folderName = GetFolderNameByDocumentType(doc.DocumentType);
+                            var entryPath = string.IsNullOrEmpty(baseFolder) 
+                                ? $"{folderName}/{fileName}" 
+                                : $"{baseFolder}/{folderName}/{fileName}";
+
+                            var entry = archive.CreateEntry(entryPath);
+                            using var entryStream = entry.Open();
+                            await fileStream.CopyToAsync(entryStream);
+                            hasAnyFile = true;
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // 個別ファイルの読み込み失敗時はスキップして処理を継続
+                    }
                 }
+                index++;
             }
-        } // ここでZipArchiveがDisposeされ、ZIPの終端データがmemoryStreamに書き込まれる
+        }
 
-        // 3. 呼び出し元がこのストリームを先頭から読み取れるように位置を0に戻す
+        if (!hasAnyFile)
+        {
+            throw new KeyNotFoundException("エクスポート可能な証憑ファイルが見つかりません。");
+        }
+
         memoryStream.Position = 0;
-
         return memoryStream;
     }
 
@@ -58,3 +102,4 @@ public class DocumentExportService(IExpenseDocumentService expenseDocumentServic
         };
     }
 }
+
