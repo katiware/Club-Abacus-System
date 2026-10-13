@@ -15,6 +15,8 @@ function AllApplications() {
 
   const [fiscalYears, setFiscalYears] = useState([]);
   const [selectedFiscalYear, setSelectedFiscalYear] = useState('');
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [isExportingZip, setIsExportingZip] = useState(false);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -33,6 +35,7 @@ function AllApplications() {
   useEffect(() => {
     const fetchAllApplications = async () => {
       setIsLoading(true);
+      setSelectedIds([]);
       try {
         const url = selectedFiscalYear ? `/Expense/all?fiscalYearId=${selectedFiscalYear}` : '/Expense/all';
         const response = await api.get(url);
@@ -48,6 +51,51 @@ function AllApplications() {
     fetchAllApplications();
   }, [selectedFiscalYear]);
 
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllFiltered = () => {
+    if (selectedIds.length === filteredApplications.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredApplications.map(a => a.id));
+    }
+  };
+
+  const handleExportZip = async (targetIds = selectedIds) => {
+    const ids = targetIds.length > 0 ? targetIds : filteredApplications.map(a => a.id);
+    if (ids.length === 0) {
+      alert('ダウンロード対象の申請がありません。');
+      return;
+    }
+
+    setIsExportingZip(true);
+    try {
+      const response = await api.post('/Expense/export-zip', ids, {
+        responseType: 'blob'
+      });
+      
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `証憑まとめ_${new Date().toISOString().slice(0,10)}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('ZIP export failed', err);
+      alert('証憑ZIPの作成に失敗しました。対象の申請に証憑ファイルがアップロードされているか確認してください。');
+    } finally {
+      setIsExportingZip(false);
+    }
+  };
+
+
   const getStatusBadge = (app) => {
     switch (app.status) {
       case 'Draft':
@@ -57,12 +105,15 @@ function AllApplications() {
           ? <span className="status-badge" style={{backgroundColor: '#fef08a', color: '#854d0e', border: '1px solid #fde047'}}><Clock size={14} /> 再承認待(変更あり)</span>
           : <span className="status-badge pending"><Clock size={14} /> 承認待ち</span>;
       case 'Approved':
+        return <span className="status-badge approved"><CheckCircle size={14} /> 事前承認済</span>;
       case 'Advance_MoneyHandedOver':
-        return <span className="status-badge approved"><CheckCircle size={14} /> 承認済（証憑提出待ち）</span>;
+        return <span className="status-badge" style={{backgroundColor: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd'}}><CheckCircle size={14} /> 事前出金渡し済</span>;
       case 'WaitingConfirmation':
-        return <span className="status-badge waiting"><Clock size={14} /> 最終確認待ち</span>;
+        return <span className="status-badge waiting"><Clock size={14} /> 領収書確認待ち</span>;
+      case 'WaitingUniversitySubmission':
+        return <span className="status-badge" style={{backgroundColor: '#ede9fe', color: '#6d28d9', border: '1px solid #ddd6fe'}}><Clock size={14} /> 大学へ提出待ち</span>;
       case 'UniversitySubmitted':
-        return <span className="status-badge"><Clock size={14} /> 大学へ提出済</span>;
+        return <span className="status-badge" style={{backgroundColor: '#dbeafe', color: '#1d4ed8'}}><Clock size={14} /> 大学へ提出済</span>;
       case 'Settled':
         return <span className="status-badge completed"><CheckCircle size={14} /> 完了</span>;
       case 'Rejected':
@@ -84,8 +135,11 @@ function AllApplications() {
     
     if (statusFilter === 'ALL') return matchesSearch;
     if (statusFilter === 'PENDING') return matchesSearch && app.status === 'PendingApproval';
-    if (statusFilter === 'APPROVED') return matchesSearch && (app.status === 'Approved' || app.status === 'Advance_MoneyHandedOver');
+    if (statusFilter === 'APPROVED') return matchesSearch && app.status === 'Approved';
+    if (statusFilter === 'ADVANCE_HANDED') return matchesSearch && app.status === 'Advance_MoneyHandedOver';
     if (statusFilter === 'CONFIRMING') return matchesSearch && app.status === 'WaitingConfirmation';
+    if (statusFilter === 'WAITING_SUBMISSION') return matchesSearch && app.status === 'WaitingUniversitySubmission';
+    if (statusFilter === 'SUBMITTED') return matchesSearch && app.status === 'UniversitySubmitted';
     if (statusFilter === 'COMPLETED') return matchesSearch && app.status === 'Settled';
     
     return matchesSearch;
@@ -94,10 +148,17 @@ function AllApplications() {
   return (
     <div className="all-apps-container fade-in">
       <PageHeader title="すべての申請一覧" backTo="/top">
-        <button className="secondary-btn">
-          <Download size={18} />
-          CSVエクスポート
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button 
+            className="secondary-btn" 
+            onClick={() => handleExportZip()}
+            disabled={isExportingZip || filteredApplications.length === 0}
+            title="現在表示中の申請に紐づく証憑を一括ZIPダウンロードします"
+          >
+            <Download size={18} />
+            {isExportingZip ? 'ZIP作成中...' : '表示中の証憑をZIP出力'}
+          </button>
+        </div>
       </PageHeader>
 
       <main className="page-content">
@@ -132,12 +193,41 @@ function AllApplications() {
             >
               <option value="ALL">すべてのステータス</option>
               <option value="PENDING">承認待ち</option>
-              <option value="APPROVED">承認済（証憑待ち）</option>
-              <option value="CONFIRMING">最終確認待ち</option>
+              <option value="APPROVED">事前承認済</option>
+              <option value="ADVANCE_HANDED">事前出金渡し済</option>
+              <option value="CONFIRMING">領収書確認待ち</option>
+              <option value="WAITING_SUBMISSION">大学へ提出待ち</option>
+              <option value="SUBMITTED">大学へ提出済</option>
               <option value="COMPLETED">完了</option>
             </select>
           </div>
         </div>
+
+        {selectedIds.length > 0 && (
+          <div style={{ margin: '0 0 16px 0', padding: '12px 16px', backgroundColor: '#e0e7ff', border: '1px solid #c7d2fe', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ color: '#3730a3', fontWeight: 'bold' }}>
+              {selectedIds.length} 件の申請を選択中
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                className="primary-btn" 
+                style={{ padding: '6px 16px', fontSize: '0.9rem' }}
+                onClick={() => handleExportZip(selectedIds)}
+                disabled={isExportingZip}
+              >
+                <Download size={16} />
+                {isExportingZip ? 'ZIP作成中...' : '選択した申請の証憑をZIPダウンロード'}
+              </button>
+              <button 
+                className="secondary-btn" 
+                style={{ padding: '6px 12px', fontSize: '0.9rem' }}
+                onClick={() => setSelectedIds([])}
+              >
+                選択解除
+              </button>
+            </div>
+          </div>
+        )}
 
         {error && <div className="p-4 text-red-500 text-center">{error}</div>}
 
@@ -145,6 +235,14 @@ function AllApplications() {
           <table className="data-table">
             <thead>
               <tr>
+                <th style={{ width: '40px', textAlign: 'center' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={filteredApplications.length > 0 && selectedIds.length === filteredApplications.length}
+                    onChange={selectAllFiltered}
+                    title="全選択 / 全解除"
+                  />
+                </th>
                 <th>申請ID</th>
                 <th>申請日</th>
                 <th>申請者</th>
@@ -158,15 +256,22 @@ function AllApplications() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="8" className="text-center p-8 text-gray-500">読み込み中...</td>
+                  <td colSpan="9" className="text-center p-8 text-gray-500">読み込み中...</td>
                 </tr>
               ) : filteredApplications.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="text-center p-8 text-gray-500">該当する申請がありません</td>
+                  <td colSpan="9" className="text-center p-8 text-gray-500">該当する申請がありません</td>
                 </tr>
               ) : (
                 filteredApplications.map(app => (
                   <tr key={app.id}>
+                    <td style={{ textAlign: 'center' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={selectedIds.includes(app.id)}
+                        onChange={() => toggleSelect(app.id)}
+                      />
+                    </td>
                     <td className="font-mono text-sm">{app.id.substring(0, 8)}</td>
                     <td>{new Date(app.createdAt).toLocaleDateString()}</td>
                     <td className="font-medium">{app.user?.name || '不明'}</td>

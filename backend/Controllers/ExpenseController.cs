@@ -59,39 +59,81 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
                 .FirstOrDefaultAsync(f => f.IsActive, cancellationToken);
         }
 
+        // 年度指定がある場合、または完了・実績系の集計用にクエリを準備
+        var fyScopedQuery = query;
         if (currentFiscalYear != null)
         {
-            var startDateTime = currentFiscalYear.StartDate.ToDateTime(TimeOnly.MinValue);
-            var endDateTime = currentFiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue);
-            query = query.Where(e => e.CreatedAt >= startDateTime && e.CreatedAt <= endDateTime);
+            var startDateTime = currentFiscalYear.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var endDateTime = currentFiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+            fyScopedQuery = query.Where(e => e.CreatedAt >= startDateTime && e.CreatedAt <= endDateTime);
         }
 
-        var pendingCount = await query
-            .Where(e => e.Status == ExpenseStatus.PendingApproval || e.Status == ExpenseStatus.WaitingConfirmation)
+        // 承認待ち件数（現在アクションが必要な件数）
+        var pendingCount = await (fiscalYearId.HasValue ? fyScopedQuery : query)
+            .Where(e => e.Status == ExpenseStatus.PendingApproval)
             .CountAsync(cancellationToken);
 
-        // TODO: 本格的な予算残高の計算ロジック
-        // 本来は currentFiscalYear.TotalBudget から、今年度のすべての確定済み経費を引く必要がありますが、
-        // 現状は固定値をベースとしています。
-        var budgetBalance = currentFiscalYear != null ? (decimal)currentFiscalYear.TotalBudget : 125000m;
+        // 進行中・証憑提出待ち・確認待ち（Approved＝事前承認済も含める）
+        var waitingConfirmationCount = await (fiscalYearId.HasValue ? fyScopedQuery : query)
+            .Where(e => e.Status == ExpenseStatus.Approved || 
+                        e.Status == ExpenseStatus.Advance_MoneyHandedOver || 
+                        e.Status == ExpenseStatus.WaitingConfirmation ||
+                        e.Status == ExpenseStatus.WaitingUniversitySubmission)
+            .CountAsync(cancellationToken);
 
+        // 精算完了件数（年度内の完了実績、年度指定がなければ当年度、それもなければ全完了）
+        var settledCount = await fyScopedQuery
+            .Where(e => e.Status == ExpenseStatus.Settled || e.Status == ExpenseStatus.UniversitySubmitted)
+            .CountAsync(cancellationToken);
+
+        // 下書き・差し戻し件数
+        var draftCount = await query
+            .Where(e => e.Status == ExpenseStatus.Draft || e.Status == ExpenseStatus.Remanded)
+            .CountAsync(cancellationToken);
+
+        var totalBudget = currentFiscalYear != null ? (decimal)currentFiscalYear.TotalBudget : 0m;
         decimal settledTotal = 0;
+        decimal approvedTotal = 0;
+        decimal pendingTotal = 0;
         var categoryTotals = new Dictionary<string, decimal>();
-        // 今年度の確定済み経費を差し引く（簡易的な計算）
+
         if (currentFiscalYear != null)
         {
-            var settledRequests = await context.ExpenseRequests
+            var fyStart = currentFiscalYear.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            var fyEnd = currentFiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+
+            // 当年度の全申請（管理者モードの場合は全体、自分モードの場合は自分のみ）
+            var fyRequestsQuery = context.ExpenseRequests
                 .Include(e => e.ExpenseItems)
+                .Where(e => e.CreatedAt >= fyStart && e.CreatedAt <= fyEnd && e.Status != ExpenseStatus.Rejected);
+
+            if (viewMode == "me" && currentUserId != Guid.Empty)
+            {
+                fyRequestsQuery = fyRequestsQuery.Where(e => e.UserId == currentUserId);
+            }
+
+            var allFyRequests = await fyRequestsQuery.ToListAsync(cancellationToken);
+
+            // 確定済み（精算完了・大学提出済）
+            settledTotal = allFyRequests
                 .Where(e => e.Status == ExpenseStatus.Settled || e.Status == ExpenseStatus.UniversitySubmitted)
-                // 簡易的に CreatedAt で今年度分を判定
-                .Where(e => e.CreatedAt >= currentFiscalYear.StartDate.ToDateTime(TimeOnly.MinValue) && 
-                            e.CreatedAt <= currentFiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue))
-                .ToListAsync(cancellationToken);
+                .Sum(e => e.TotalAmount);
 
-            settledTotal = settledRequests.Sum(e => e.TotalAmount);
-            budgetBalance -= settledTotal;
+            // 事前承認済み（承認済・現金渡し済・領収書確認待ち・大学提出待ち）
+            approvedTotal = allFyRequests
+                .Where(e => e.Status == ExpenseStatus.Approved || 
+                            e.Status == ExpenseStatus.Advance_MoneyHandedOver || 
+                            e.Status == ExpenseStatus.WaitingConfirmation ||
+                            e.Status == ExpenseStatus.WaitingUniversitySubmission)
+                .Sum(e => e.TotalAmount);
 
-            foreach (var req in settledRequests)
+            // 承認待ち
+            pendingTotal = allFyRequests
+                .Where(e => e.Status == ExpenseStatus.PendingApproval)
+                .Sum(e => e.TotalAmount);
+
+            // カテゴリ別集計（確定支出 ＋ 承認済み支出）
+            foreach (var req in allFyRequests.Where(e => e.Status != ExpenseStatus.Draft && e.Status != ExpenseStatus.Remanded))
             {
                 foreach (var item in req.ExpenseItems)
                 {
@@ -131,17 +173,25 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
                 }
                 else
                 {
-                    break; // 万が一未知の頻度があった場合の無限ループ防止
+                    break;
                 }
             }
 
             futureRecurringTotal += template.Amount * occurrences;
         }
-        
-        budgetBalance -= futureRecurringTotal;
 
-        // TODO: 期限切れの計算（事前出金で未精算かつ期日超過のものなど。とりあえず固定値）
-        var overdueCount = 0;
+        var budgetBalance = totalBudget - (settledTotal + futureRecurringTotal);
+        var effectiveBalance = totalBudget - (settledTotal + approvedTotal + futureRecurringTotal);
+        var isBudgetOver = totalBudget > 0 && (settledTotal + approvedTotal + futureRecurringTotal) > totalBudget;
+        var isPendingOver = totalBudget > 0 && (settledTotal + approvedTotal + pendingTotal + futureRecurringTotal) > totalBudget;
+
+        // 期限切れ・要確認カウント（事前出金で現金手渡し済みだが、領収書未提出で30日以上経過したものなど）
+        var thirtyDaysAgo = DateTime.UtcNow.AddDays(-30);
+        var overdueCount = await query
+            .Where(e => e.Type == ExpenseType.Advance && 
+                        e.Status == ExpenseStatus.Advance_MoneyHandedOver && 
+                        e.UpdatedAt <= thirtyDaysAgo)
+            .CountAsync(cancellationToken);
 
         int unfinalizedCount = 0;
         if (currentUserId != Guid.Empty)
@@ -157,12 +207,21 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         return Ok(new ExpenseSummaryDto
         {
             PendingCount = pendingCount,
+            WaitingConfirmationCount = waitingConfirmationCount,
+            SettledCount = settledCount,
+            DraftCount = draftCount,
             OverdueCount = overdueCount,
             BudgetBalance = budgetBalance,
+            EffectiveBalance = effectiveBalance,
+            IsBudgetOver = isBudgetOver,
+            IsPendingOver = isPendingOver,
             UnfinalizedCount = unfinalizedCount,
             YearName = currentFiscalYear?.YearName,
-            TotalBudget = currentFiscalYear != null ? (decimal)currentFiscalYear.TotalBudget : 125000m,
+            TotalBudget = totalBudget,
             SettledTotal = settledTotal,
+            ApprovedTotal = approvedTotal,
+            PendingTotal = pendingTotal,
+            FutureRecurringTotal = futureRecurringTotal,
             TotalRequestsCount = totalRequestsCount,
             CategoryTotals = categoryTotals
         });
@@ -292,8 +351,8 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             var fy = await context.FiscalYears.FindAsync(new object[] { fiscalYearId.Value }, cancellationToken);
             if (fy != null)
             {
-                query = query.Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue) && 
-                                         e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue));
+                query = query.Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) && 
+                                         e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc));
             }
         }
 
@@ -328,8 +387,8 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             var fy = await context.FiscalYears.FindAsync(new object[] { fiscalYearId.Value }, cancellationToken);
             if (fy != null)
             {
-                query = query.Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue) && 
-                                         e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue));
+                query = query.Where(e => e.CreatedAt >= fy.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) && 
+                                         e.CreatedAt <= fy.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc));
             }
         }
 
@@ -420,7 +479,9 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             return NotFound("指定された申請が見つかりません。");
         }
 
-        if (expenseRequest.Status != ExpenseStatus.PendingApproval && expenseRequest.Status != ExpenseStatus.WaitingConfirmation)
+        if (expenseRequest.Status != ExpenseStatus.PendingApproval && 
+            expenseRequest.Status != ExpenseStatus.WaitingConfirmation &&
+            expenseRequest.Status != ExpenseStatus.WaitingUniversitySubmission)
         {
             return BadRequest("この申請は差し戻しできるステータスではありません。");
         }
@@ -559,10 +620,10 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             return NotFound("指定された申請が見つかりません。");
         }
 
-        // 🚨 セキュリティ対策: 自分の申請は自分で承認・却下できないようにする
+        // 🚨 ガバナンス・セキュリティ対策: 自分の申請は自分では承認・却下できない（主将会計であっても自己承認は禁止）
         if (expenseRequest.UserId == currentUserId)
         {
-            return StatusCode(StatusCodes.Status403Forbidden, "自分の申請を自分で承認・却下することはできません。");
+            return StatusCode(StatusCodes.Status403Forbidden, "自分自身の申請を自分で承認・却下することはできません。不正防止のため、他の役員またはシステム管理者による承認が必要です。");
         }
 
         if (dto.Status != ExpenseStatus.Approved && dto.Status != ExpenseStatus.Rejected)
@@ -643,7 +704,10 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         // 事前出金または金額変動がある場合、まだユーザーが実費確定していない場合は進めない
         bool requiresAmountFinalization = expenseRequest.IsAmountVariable || expenseRequest.Type == ExpenseType.Advance;
         if (requiresAmountFinalization && !expenseRequest.IsAmountFinalized && 
-            (dto.Status == ExpenseStatus.WaitingConfirmation || dto.Status == ExpenseStatus.Settled || dto.Status == ExpenseStatus.UniversitySubmitted))
+            (dto.Status == ExpenseStatus.WaitingConfirmation || 
+             dto.Status == ExpenseStatus.WaitingUniversitySubmission || 
+             dto.Status == ExpenseStatus.Settled || 
+             dto.Status == ExpenseStatus.UniversitySubmitted))
         {
             return BadRequest("事前出金または金額変動が設定されている申請ですが、まだ実費金額が確定されていません。ユーザーに金額を入力・確定してもらってください。");
         }
@@ -659,6 +723,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             // ※現金手渡し時点では買い物が終わっていないため、領収書画像の必須チェックは行わない
         }
         else if (dto.Status == ExpenseStatus.WaitingConfirmation ||
+                 dto.Status == ExpenseStatus.WaitingUniversitySubmission ||
                  dto.Status == ExpenseStatus.UniversitySubmitted ||
                  dto.Status == ExpenseStatus.Settled)
         {
@@ -851,5 +916,36 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         result.One = remaining;
 
         return result;
+    }
+
+    /// <summary>
+    /// 選択した複数の経費申請に紐づく証憑ファイルをまとめてZIPダウンロードします。
+    /// </summary>
+    [HttpPost("export-zip")]
+    [Authorize]
+    public async Task<IActionResult> ExportMultipleDocumentsZip(
+        [FromBody] List<Guid> requestIds, 
+        [FromServices] Club_Abacus_System.Services.IDocumentExportService exportService)
+    {
+        var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        _ = Guid.TryParse(userIdString, out var currentUserId);
+
+        var hasAdminAccess = User.HasClaim("Permission", PermissionType.ExpenseReadAll.ToString()) ||
+                             User.IsInRole("ADMIN") || User.IsInRole("MANAGER");
+
+        try
+        {
+            var zipStream = await exportService.ExportMultipleDocumentsToZipAsync(requestIds, currentUserId, hasAdminAccess);
+            var fileName = $"ClubAbacus_証憑まとめ_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+            return File(zipStream, "application/zip", fileName);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 }
