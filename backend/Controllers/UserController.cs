@@ -269,12 +269,28 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
     }
 
     /// <summary>
+    /// 学校名簿から部員を一括同期・登録します（後方互換・単一ファイル用）。
+    /// </summary>
+    [HttpPost("import")]
+    [RequirePermission(PermissionType.ManageUsers)]
+    public async Task<IActionResult> ImportUsers(IFormFile? file, IFormFile? schoolListFile)
+    {
+        var targetFile = file ?? schoolListFile;
+        if (targetFile == null || targetFile.Length == 0)
+        {
+            return BadRequest("ファイルが選択されていません。");
+        }
+        return await SyncUsers(targetFile, null);
+    }
+
+    /// <summary>
     /// 学校名簿とフォーム回答から部員情報を同期します。
     /// </summary>
     [HttpPost("sync")]
     [RequirePermission(PermissionType.ManageUsers)]
-    public async Task<IActionResult> SyncUsers(IFormFile? schoolListFile, IFormFile? formListFile)
+    public async Task<IActionResult> SyncUsers(IFormFile? schoolListFile, IFormFile? formListFile, IFormFile? file = null)
     {
+        schoolListFile ??= file;
         if ((schoolListFile == null || schoolListFile.Length == 0) &&
             (formListFile == null || formListFile.Length == 0))
         {
@@ -545,7 +561,11 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
 
                             if (!string.IsNullOrEmpty(studentId) && !string.IsNullOrEmpty(discordId))
                             {
-                                if (!IsValidInput(studentId, 20, out _) || !IsValidInput(discordId, 100, out string discordErr))
+                                if (!IsValidInput(studentId, 20, out string sidErr))
+                                {
+                                    errors.Add($"フォーム回答 (Excel) 学籍番号 {studentId} のデータをスキップしました: {sidErr}");
+                                }
+                                else if (!IsValidInput(discordId, 100, out string discordErr))
                                 {
                                     errors.Add($"フォーム回答 (Excel) 学籍番号 {studentId} のデータをスキップしました: {discordErr}");
                                 }
@@ -566,9 +586,9 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
                     int discordCol = -1;
                     int rowNum = 1;
 
-                    while (!reader.EndOfStream)
+                    string? line;
+                    while ((line = await reader.ReadLineAsync()) != null)
                     {
-                        var line = await reader.ReadLineAsync();
                         rowNum++;
                         if (string.IsNullOrWhiteSpace(line)) continue;
 
@@ -595,7 +615,11 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
                             var discordId = values[discordCol].Trim('\"', ' ');
                             if (!string.IsNullOrEmpty(studentId) && !string.IsNullOrEmpty(discordId))
                             {
-                                if (!IsValidInput(studentId, 20, out _) || !IsValidInput(discordId, 100, out string discordErr))
+                                if (!IsValidInput(studentId, 20, out string sidErr))
+                                {
+                                    errors.Add($"フォーム回答 (CSV) 学籍番号 {studentId} のデータをスキップしました: {sidErr}");
+                                }
+                                else if (!IsValidInput(discordId, 100, out string discordErr))
                                 {
                                     errors.Add($"フォーム回答 (CSV) 学籍番号 {studentId} のデータをスキップしました: {discordErr}");
                                 }
