@@ -129,22 +129,28 @@ function UserManagement() {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!confirm(`${file.name} をアップロードして一括登録を実行しますか？\n(※大学指定の部員名簿フォーマットに対応。学籍番号からメールアドレスと入学年度を自動生成します)`)) {
+    if (!confirm(`${file.name} をアップロードして一括登録（名簿同期）を実行しますか？\n(※大学指定の部員名簿フォーマットに対応。学籍番号からメールアドレスと入学年度を自動生成します)`)) {
       e.target.value = null;
       return;
     }
 
     const formData = new FormData();
+    formData.append('schoolListFile', file);
     formData.append('file', file);
 
     try {
       setIsLoading(true);
-      const response = await api.post('/User/import', formData, {
+      const response = await api.post('/User/sync', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      alert(response.data.message);
-      if (response.data.errors && response.data.errors.length > 0) {
-        alert('一部の行でエラーがありました。詳細はコンソールまたはログをご確認ください。\n' + response.data.errors.slice(0, 5).join('\n') + (response.data.errors.length > 5 ? '\n...' : ''));
+      const { message, added, updated, deactivated, errors } = response.data || {};
+      let resultMsg = message || '同期処理が終了しました。';
+      if (added !== undefined || updated !== undefined || deactivated !== undefined) {
+        resultMsg += `\n(新規追加: ${added || 0}件, 更新: ${updated || 0}件, 無効化: ${deactivated || 0}件)`;
+      }
+      alert(resultMsg);
+      if (errors && errors.length > 0) {
+        alert('一部の行でエラーまたはスキップがありました。\n' + errors.slice(0, 5).join('\n') + (errors.length > 5 ? '\n...' : ''));
       }
       fetchData();
     } catch (err) {
