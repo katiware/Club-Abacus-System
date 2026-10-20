@@ -35,11 +35,6 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         var isAdmin = User.HasClaim("Permission", PermissionType.ExpenseReadAll.ToString());
 
-        if (!isAdmin)
-        {
-            viewMode = "me";
-        }
-
         var query = context.ExpenseRequests.AsQueryable();
         if (viewMode == "me")
         {
@@ -131,14 +126,22 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
                 .Where(e => e.Status == ExpenseStatus.PendingApproval)
                 .Sum(e => Math.Max(0, e.TotalAmount - e.ExternalBudgetAmount));
 
-            // ④ 部費外予算の集計
-            externalBudgetTotal = await context.ExternalBudgets
-                .Where(b => b.FiscalYearId == currentFiscalYear.Id)
-                .SumAsync(b => b.TotalAmount, cancellationToken);
+            // ④ 部費外予算の集計（一般部員には非表示・主将会計/管理者のみ）
+            if (isAdmin)
+            {
+                externalBudgetTotal = await context.ExternalBudgets
+                    .Where(b => b.FiscalYearId == currentFiscalYear.Id)
+                    .SumAsync(b => b.TotalAmount, cancellationToken);
 
-            externalBudgetUsedTotal = allFyRequests
-                .Where(e => e.Status != ExpenseStatus.Draft && e.Status != ExpenseStatus.Remanded)
-                .Sum(e => e.ExternalBudgetAmount);
+                externalBudgetUsedTotal = allFyRequests
+                    .Where(e => e.Status != ExpenseStatus.Draft && e.Status != ExpenseStatus.Remanded)
+                    .Sum(e => e.ExternalBudgetAmount);
+            }
+            else
+            {
+                externalBudgetTotal = 0;
+                externalBudgetUsedTotal = 0;
+            }
 
             // ⑤ ログインユーザー自身の個人利用実績（自分モード時に表示: 部費実質負担額ベース）
             if (currentUserId != Guid.Empty)

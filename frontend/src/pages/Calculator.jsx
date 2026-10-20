@@ -281,6 +281,9 @@ function Calculator() {
                 ) : (
                   <>現在、複数申請のある人物はいません（全件個別の対象者です）。</>
                 )}
+                <span style={{ display: 'block', marginTop: '4px', fontSize: '11px', color: '#64748b' }}>
+                  💡 <strong>使い方ヒント:</strong> 「まとめて合算」すると小銭や千円札が高額紙幣にまとまり準備枚数が大幅に削減されます。手渡し時に案件ごとに封筒を分けたい場合は「個別に分ける」をご利用ください。
+                </span>
               </span>
             </div>
 

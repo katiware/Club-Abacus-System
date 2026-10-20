@@ -32,6 +32,9 @@ function FiscalYearDashboard() {
     externalBudgetUsedTotal: 0
   });
 
+  const userRole = localStorage.getItem('userRole') || 'USER';
+  const isManagerOrAdmin = userRole === 'ADMIN' || userRole === 'MANAGER';
+
   const [externalBudgets, setExternalBudgets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -40,7 +43,7 @@ function FiscalYearDashboard() {
       try {
         const [sumRes, extRes] = await Promise.all([
           api.get(`/Expense/summary?viewMode=all&fiscalYearId=${id}`),
-          api.get(`/ExternalBudget?fiscalYearId=${id}`)
+          isManagerOrAdmin ? api.get(`/ExternalBudget?fiscalYearId=${id}`) : Promise.resolve({ data: [] })
         ]);
         setSummaryData(sumRes.data);
         setExternalBudgets(extRes.data || []);
@@ -51,7 +54,7 @@ function FiscalYearDashboard() {
       }
     };
     fetchSummary();
-  }, [id]);
+  }, [id, isManagerOrAdmin]);
 
   const { 
     pendingCount, 
@@ -82,7 +85,10 @@ function FiscalYearDashboard() {
 
   return (
     <div className="top-page-container fade-in">
-      <PageHeader title={`${yearName || '年度'} 予算・実績ダッシュボード`} backTo="/fiscal-years" />
+      <PageHeader 
+        title={`${yearName || '年度'} 予算・実績ダッシュボード`} 
+        backTo={isManagerOrAdmin ? "/fiscal-years" : "/top"} 
+      />
 
       <main className="top-page-content" style={{ marginTop: '20px' }}>
         
@@ -255,8 +261,8 @@ function FiscalYearDashboard() {
             </div>
           )}
 
-          {/* 部費外予算（特別予算・自己負担等）の消化状況 */}
-          {externalBudgets && externalBudgets.length > 0 && (
+          {/* 部費外予算（特別予算・自己負担等）の消化状況（主将会計・管理者のみ表示） */}
+          {isManagerOrAdmin && externalBudgets && externalBudgets.length > 0 && (
             <div style={{ marginTop: '36px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                 <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#1f2937', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -264,10 +270,10 @@ function FiscalYearDashboard() {
                   部費外予算（OB寄付金・特別助成等）の状況
                 </h3>
                 <button 
-                  onClick={() => navigate('/fiscal-years')}
-                  style={{ fontSize: '0.85rem', color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                  onClick={() => navigate(`/external-budgets/${id}`)}
+                  style={{ fontSize: '0.85rem', color: '#db2777', fontWeight: 'bold', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                 >
-                  部費外予算の設定・追加
+                  部費外予算の管理・設定へ →
                 </button>
               </div>
 

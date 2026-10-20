@@ -235,6 +235,9 @@ function ExpenseSettleVerification() {
               {app.externalBudgetAmount > 0 && (
                 <div style={{ marginTop: '6px', fontSize: '0.85rem', color: '#6b7280' }}>
                   部費負担: <strong>¥{(app.totalAmount - app.externalBudgetAmount).toLocaleString()}</strong> / 部費外充当: <strong style={{ color: '#db2777' }}>¥{app.externalBudgetAmount.toLocaleString()}</strong>
+                  <span style={{ marginLeft: '4px', backgroundColor: '#fdf2f8', padding: '1px 6px', borderRadius: '4px', border: '1px solid #fbcfe8', fontSize: '0.8rem', color: '#9d174d' }}>
+                    {app.externalBudgetAssetType === 'Cash' ? '💵 現金' : app.externalBudgetAssetType === 'AmazonGift' ? '🎁 Amazonギフト' : '🏷️ その他'}
+                  </span>
                 </div>
               )}
             </div>

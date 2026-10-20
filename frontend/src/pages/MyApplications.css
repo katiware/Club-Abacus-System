@@ -29,10 +29,135 @@
   width: 100%;
 }
 
-.cards-wrapper {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
+.cards-wrapper,
+.my-apps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.app-list-row {
+  background-color: var(--surface-color);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--primary-color);
+  padding: 1rem 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  cursor: pointer;
+}
+
+.app-list-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.07);
+  border-color: #cbd5e1;
+}
+
+.app-row-main {
+  flex: 1 1 320px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.app-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.receipt-type-badge {
+  font-size: 0.75rem;
+  background-color: #f1f5f9;
+  color: #475569;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+}
+
+.app-row-title {
+  margin: 0;
+  font-size: 1.08rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.app-row-amount-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  min-width: 130px;
+  text-align: right;
+}
+
+.app-row-status-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.app-row-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  transition: transform 0.15s ease, color 0.15s ease;
+  padding-left: 4px;
+}
+
+.app-list-row:hover .app-row-arrow {
+  color: var(--primary-color);
+  transform: translateX(2px);
+}
+
+.row-upload-btn {
+  font-size: 0.8rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+}
+
+@media (max-width: 768px) {
+  .app-list-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding: 1rem;
+  }
+
+  .app-row-amount-col {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .app-row-status-col {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    border-top: 1px dashed var(--border-color);
+    padding-top: 10px;
+  }
+
+  .app-row-arrow {
+    display: none;
+  }
 }
 
 .app-card {

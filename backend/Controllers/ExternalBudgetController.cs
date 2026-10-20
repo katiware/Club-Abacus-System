@@ -21,6 +21,14 @@ public class ExternalBudgetController(AppDbContext context) : ControllerBase
     [HttpGet]
     public async Task<ActionResult<List<ExternalBudgetDto>>> GetExternalBudgets([FromQuery] Guid? fiscalYearId = null, CancellationToken cancellationToken = default)
     {
+        // 部費外予算は主将会計・管理者のみ閲覧可能（一般部員には非公開）
+        var hasPermission = User.HasClaim("Permission", PermissionType.ExpenseReadAll.ToString()) ||
+                            User.HasClaim("Permission", PermissionType.ManageMasterData.ToString());
+        if (!hasPermission)
+        {
+            return Ok(new List<ExternalBudgetDto>());
+        }
+
         Guid targetFyId;
         if (fiscalYearId.HasValue)
         {
@@ -200,6 +208,32 @@ public class ExternalBudgetController(AppDbContext context) : ControllerBase
         if (budget == null)
         {
             return NotFound("指定された部費外予算は見つかりません。");
+        }
+
+        // 既存の消化額をチェックして、消化済み額を下回る減額を防ぐ
+        var reqs = await context.ExpenseRequests
+            .AsNoTracking()
+            .Where(r => r.ExternalBudgetId == id && 
+                        r.Status != ExpenseStatus.Draft && 
+                        r.Status != ExpenseStatus.Rejected && 
+                        r.Status != ExpenseStatus.Remanded)
+            .ToListAsync(cancellationToken);
+
+        var usedCash = reqs.Where(r => !r.ExternalBudgetAssetType.HasValue || r.ExternalBudgetAssetType == ExternalBudgetAssetType.Cash).Sum(r => r.ExternalBudgetAmount);
+        var usedAmazon = reqs.Where(r => r.ExternalBudgetAssetType == ExternalBudgetAssetType.AmazonGift).Sum(r => r.ExternalBudgetAmount);
+        var usedOther = reqs.Where(r => r.ExternalBudgetAssetType == ExternalBudgetAssetType.Other).Sum(r => r.ExternalBudgetAmount);
+
+        if (dto.CashAmount < usedCash)
+        {
+            return BadRequest($"現金の枠金額は、現在の使用済み額（¥{usedCash:N0}）以上である必要があります。");
+        }
+        if (dto.AmazonGiftAmount < usedAmazon)
+        {
+            return BadRequest($"Amazonギフト券の枠金額は、現在の使用済み額（¥{usedAmazon:N0}）以上である必要があります。");
+        }
+        if (dto.OtherAmount < usedOther)
+        {
+            return BadRequest($"その他の枠金額は、現在の使用済み額（¥{usedOther:N0}）以上である必要があります。");
         }
 
         budget.Name = dto.Name.Trim();

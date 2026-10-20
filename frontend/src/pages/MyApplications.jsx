@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, UploadCloud, CheckCircle, Clock, Plus, Download, Eye, Paperclip, AlertCircle, Search } from 'lucide-react';
+import { ArrowLeft, FileText, UploadCloud, CheckCircle, Clock, Plus, Download, Eye, Paperclip, AlertCircle, Search, ChevronRight } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import api from '../services/api';
 import './MyApplications.css';
@@ -9,6 +9,9 @@ function MyApplications() {
   const navigate = useNavigate();
   const [applications, setApplications] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  const userRole = localStorage.getItem('userRole') || 'USER';
+  const isManagerOrAdmin = userRole === 'ADMIN' || userRole === 'MANAGER';
   
   // State for upload modal
   const [uploadingApp, setUploadingApp] = useState(null);
@@ -193,47 +196,69 @@ function MyApplications() {
         ) : applications.length === 0 ? (
           <div className="empty-state">申請履歴がありません。</div>
         ) : (
-          <div className="cards-wrapper">
+          <div className="my-apps-list">
             {applications.map(app => (
-              <div key={app.id} className="app-card" onClick={() => app.status === 'Draft' ? navigate(`/apply/${app.id}`) : navigate(`/applications/${app.id}`)}>
-                <div className="app-card-header">
-                  <span className="app-id">ID: {app.id.substring(0, 8)}</span>
-                  <span className="app-date">{new Date(app.createdAt).toLocaleDateString()}</span>
+              <div 
+                key={app.id} 
+                className="app-list-row" 
+                onClick={() => app.status === 'Draft' ? navigate(`/apply/${app.id}`) : navigate(`/applications/${app.id}`)}
+              >
+                {/* 左側：ID・日付・種別バッジおよびタイトル */}
+                <div className="app-row-main">
+                  <div className="app-row-meta">
+                    <span className="app-id">ID: {app.id.substring(0, 8)}</span>
+                    <span className="app-date">{new Date(app.createdAt).toLocaleDateString()}</span>
+                    <span className={`app-type ${app.type === 'Advance' ? 'type-advance' : 'type-reimburse'}`}>
+                      {getTypeStr(app.type)}
+                    </span>
+                    <span className="receipt-type-badge">
+                      {getReceiptTypeStr(app.receiptType)}
+                    </span>
+                  </div>
+                  <h3 className="app-row-title">{getTitle(app)}</h3>
                 </div>
-                <h3 className="app-title">{getTitle(app)}</h3>
-                <div className="app-details">
-                  <span className="app-amount">
+
+                {/* 中央：金額・未確定タグ・部費外充当タグ */}
+                <div className="app-row-amount-col">
+                  <div className="app-amount">
                     {app.isAmountVariable && !app.isAmountFinalized ? `~¥${app.totalAmount.toLocaleString()} (目安)` : `¥${app.totalAmount.toLocaleString()}`}
-                  </span>
-                  {app.externalBudgetAmount > 0 && (
-                    <span style={{ fontSize: '0.8rem', backgroundColor: '#fdf2f8', color: '#9d174d', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', fontWeight: 'bold' }}>
-                      うち部費外充当: ¥{app.externalBudgetAmount.toLocaleString()}
+                  </div>
+                  {app.isAmountVariable && !app.isAmountFinalized && (
+                    <span className="status-badge warning" style={{ backgroundColor: '#fef3c7', color: '#92400e', fontSize: '11px', padding: '2px 6px' }}>
+                      金額未確定
                     </span>
                   )}
-                  {app.isAmountVariable && !app.isAmountFinalized && (
-                    <span className="status-badge warning" style={{backgroundColor: '#ffeeba', color: '#856404', marginLeft: '8px', fontSize: '11px'}}>金額未確定</span>
+                  {isManagerOrAdmin && app.externalBudgetAmount > 0 && (
+                    <span style={{ fontSize: '0.75rem', backgroundColor: '#fdf2f8', color: '#9d174d', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                      うち部費外: ¥{app.externalBudgetAmount.toLocaleString()}
+                    </span>
                   )}
-                  <span className={`app-type ${app.type === 'Advance' ? 'type-advance' : 'type-reimburse'}`} style={{marginLeft: 'auto'}}>
-                    {getTypeStr(app.type)} ({getReceiptTypeStr(app.receiptType)})
-                  </span>
                 </div>
-                <div className="app-footer">
+
+                {/* 右側：ステータスバッジ ＆ 証憑提出ボタン */}
+                <div className="app-row-status-col">
                   {getStatusBadge(app)}
                   {needsUpload(app) && (
                     <button 
-                      className="upload-btn"
+                      className="upload-btn row-upload-btn"
                       onClick={(e) => {
                         e.stopPropagation();
                         openUploadModal(app);
                       }}
+                      title="領収書などの証憑をアップロード"
                     >
-                      <UploadCloud size={16} />
-                      証憑を提出
+                      <UploadCloud size={14} />
+                      証憑提出
                     </button>
                   )}
                   {(app.status === 'Approved' || app.status === 'Advance_MoneyHandedOver') && app.receiptType === 'Paper' && (
-                    <span className="store-note">※紙の領収書を会計担当に直接お渡しください。</span>
+                    <span className="store-note">※紙の領収書を手渡し</span>
                   )}
+                </div>
+
+                {/* 右端：詳細へ進む矢印アイコン */}
+                <div className="app-row-arrow">
+                  <ChevronRight size={18} />
                 </div>
               </div>
             ))}

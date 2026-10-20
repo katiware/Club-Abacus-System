@@ -15,6 +15,7 @@ import RecurringPayments from './pages/RecurringPayments';
 import ProfileSettings from './pages/ProfileSettings';
 import FiscalYearSettings from './pages/FiscalYearSettings';
 import FiscalYearDashboard from './pages/FiscalYearDashboard';
+import ExternalBudgetManagement from './pages/ExternalBudgetManagement';
 import './App.css';
 
 // A simple PrivateRoute component for protecting routes
@@ -137,11 +138,27 @@ function App() {
           }
         />
         <Route
-          path="/fiscal-year-dashboard/:id"
+          path="/external-budgets"
           element={
             <AdminRoute>
-              <FiscalYearDashboard />
+              <ExternalBudgetManagement />
             </AdminRoute>
+          }
+        />
+        <Route
+          path="/external-budgets/:fiscalYearId"
+          element={
+            <AdminRoute>
+              <ExternalBudgetManagement />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/fiscal-year-dashboard/:id"
+          element={
+            <PrivateRoute>
+              <FiscalYearDashboard />
+            </PrivateRoute>
           }
         />
         <Route

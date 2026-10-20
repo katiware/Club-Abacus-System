@@ -15,14 +15,12 @@ function Admin() {
     setIsLoading(true);
     try {
       const response = await api.get('/Expense/all');
-      // 未処理タスクのみをフィルタリング
+      // 主将会計側で処理・対応が必要なタスクのみをフィルタリング
+      // （事前承認済や出金渡し済などの申請者待ち、および大学提出済は除外）
       const pendingTasks = response.data.filter(app => 
         app.status === 'PendingApproval' || 
-        app.status === 'Approved' ||
-        app.status === 'Advance_MoneyHandedOver' ||
         app.status === 'WaitingConfirmation' ||
-        app.status === 'WaitingUniversitySubmission' ||
-        app.status === 'UniversitySubmitted'
+        app.status === 'WaitingUniversitySubmission'
       );
       setApplications(pendingTasks);
     } catch (err) {
@@ -58,15 +56,19 @@ function Admin() {
 
   return (
     <div className="admin-container fade-in">
-      <PageHeader title="管理画面 - 未処理タスク一覧" backTo="/top" />
+      <PageHeader title="要確認のタスク一覧" backTo="/top" />
 
       <main className="admin-content">
         {error && <div className="p-4 text-red-500 text-center">{error}</div>}
         
+        <div style={{ marginBottom: '16px', padding: '12px 16px', backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', fontSize: '0.85rem', color: '#1e40af' }}>
+          💡 <strong>主将会計が処理・対応すべき申請のみを表示しています</strong>（事前承認済・現金渡し済など部員の領収書提出待ちの案件はここには表示されません）。
+        </div>
+
         {isLoading ? (
           <div className="loading-state">読み込み中...</div>
         ) : applications.length === 0 ? (
-          <div className="empty-state">現在、未処理のタスクはありません。</div>
+          <div className="empty-state">現在、会計側で処理が必要なタスクはありません。</div>
         ) : (
           <div className="table-wrapper">
             <table className="admin-table">
