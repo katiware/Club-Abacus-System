@@ -15,6 +15,10 @@ public class ExternalBudgetCreateDto
     [Range(0, int.MaxValue, ErrorMessage = "予算額は0以上である必要があります。")]
     public int TotalAmount { get; set; }
 
+    public int CashAmount { get; set; } = 0;
+    public int AmazonGiftAmount { get; set; } = 0;
+    public int OtherAmount { get; set; } = 0;
+
     [MaxLength(500)]
     public string? Description { get; set; }
 }

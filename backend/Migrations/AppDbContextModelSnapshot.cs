@@ -186,6 +186,9 @@ namespace Club_Abacus_System.Migrations
                     b.Property<int>("ExternalBudgetAmount")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ExternalBudgetAssetType")
+                        .HasColumnType("integer");
+
                     b.Property<Guid?>("ExternalBudgetId")
                         .HasColumnType("uuid");
 
@@ -258,6 +261,12 @@ namespace Club_Abacus_System.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<int>("AmazonGiftAmount")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CashAmount")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -272,6 +281,9 @@ namespace Club_Abacus_System.Migrations
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
+
+                    b.Property<int>("OtherAmount")
+                        .HasColumnType("integer");
 
                     b.Property<int>("TotalAmount")
                         .HasColumnType("integer");

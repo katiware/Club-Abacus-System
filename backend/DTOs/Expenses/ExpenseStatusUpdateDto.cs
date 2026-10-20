@@ -13,4 +13,6 @@ public class ExpenseStatusUpdateDto
     public int? ExternalBudgetAmount { get; set; }
 
     public Guid? ExternalBudgetId { get; set; }
+
+    public ExternalBudgetAssetType? ExternalBudgetAssetType { get; set; }
 }

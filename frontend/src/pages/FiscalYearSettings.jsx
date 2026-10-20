@@ -34,7 +34,12 @@ function FiscalYearSettings() {
   const [targetYearForExternalBudget, setTargetYearForExternalBudget] = useState(null);
   const [extBudgetsList, setExtBudgetsList] = useState([]);
   const [isLoadingExtBudgets, setIsLoadingExtBudgets] = useState(false);
-  const [newExtBudget, setNewExtBudget] = useState({ name: '', totalAmount: '', description: '' });
+  const [newExtBudget, setNewExtBudget] = useState({ name: '', cashAmount: '', amazonGiftAmount: '', otherAmount: '', description: '' });
+
+  // 資産振替（換金）モーダル用の状態
+  const [convertTargetBudget, setConvertTargetBudget] = useState(null);
+  const [convertForm, setConvertForm] = useState({ fromType: 2, toType: 1, amount: '', convertedAmount: '', note: '' });
+  const [isSubmittingConvert, setIsSubmittingConvert] = useState(false);
 
   const fetchExternalBudgetsForYear = async (fyId) => {
     setIsLoadingExtBudgets(true);
@@ -51,25 +56,80 @@ function FiscalYearSettings() {
 
   const handleOpenExternalBudgetModal = (fy) => {
     setTargetYearForExternalBudget(fy);
-    setNewExtBudget({ name: '', totalAmount: '', description: '' });
+    setNewExtBudget({ name: '', cashAmount: '', amazonGiftAmount: '', otherAmount: '', description: '' });
     fetchExternalBudgetsForYear(fy.id);
   };
 
   const handleCreateExtBudget = async (e) => {
     e.preventDefault();
     if (!targetYearForExternalBudget) return;
+    const cash = parseInt(newExtBudget.cashAmount, 10) || 0;
+    const amazon = parseInt(newExtBudget.amazonGiftAmount, 10) || 0;
+    const other = parseInt(newExtBudget.otherAmount, 10) || 0;
+    const total = cash + amazon + other;
+    if (total <= 0) {
+      alert('現金・Amazonギフトカード・その他のいずれかに1円以上の枠を入力してください。');
+      return;
+    }
     try {
       await api.post('/ExternalBudget', {
         fiscalYearId: targetYearForExternalBudget.id,
         name: newExtBudget.name,
-        totalAmount: parseInt(newExtBudget.totalAmount, 10),
+        cashAmount: cash,
+        amazonGiftAmount: amazon,
+        otherAmount: other,
+        totalAmount: total,
         description: newExtBudget.description
       });
-      setNewExtBudget({ name: '', totalAmount: '', description: '' });
+      setNewExtBudget({ name: '', cashAmount: '', amazonGiftAmount: '', otherAmount: '', description: '' });
       await fetchExternalBudgetsForYear(targetYearForExternalBudget.id);
     } catch (err) {
       console.error(err);
       alert(`エラー: ${err.response?.data?.message || err.response?.data || '部費外予算の登録に失敗しました'}`);
+    }
+  };
+
+  const handleOpenConvertModal = (budget) => {
+    setConvertTargetBudget(budget);
+    setConvertForm({
+      fromType: 2, // AmazonGift
+      toType: 1,   // Cash
+      amount: '',
+      convertedAmount: '',
+      note: ''
+    });
+  };
+
+  const handleExecuteConvert = async (e) => {
+    e.preventDefault();
+    if (!convertTargetBudget) return;
+    const amt = parseInt(convertForm.amount, 10) || 0;
+    const convAmt = parseInt(convertForm.convertedAmount, 10) || amt;
+    if (amt <= 0) {
+      alert('振替金額は1円以上を入力してください。');
+      return;
+    }
+    if (convertForm.fromType === convertForm.toType) {
+      alert('振替元と振替先には異なる形態を指定してください。');
+      return;
+    }
+    setIsSubmittingConvert(true);
+    try {
+      await api.post(`/ExternalBudget/${convertTargetBudget.id}/convert`, {
+        fromType: parseInt(convertForm.fromType, 10),
+        toType: parseInt(convertForm.toType, 10),
+        amount: amt,
+        convertedAmount: convAmt,
+        note: convertForm.note
+      });
+      alert('資産振替（換金）が完了しました。');
+      setConvertTargetBudget(null);
+      await fetchExternalBudgetsForYear(targetYearForExternalBudget.id);
+    } catch (err) {
+      console.error(err);
+      alert(`エラー: ${err.response?.data?.message || err.response?.data || '振替に失敗しました。'}`);
+    } finally {
+      setIsSubmittingConvert(false);
     }
   };
 
@@ -658,28 +718,64 @@ function FiscalYearSettings() {
                   現在登録されている部費外予算はありません。下のフォームから登録してください。
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {extBudgetsList.map(b => (
-                    <div key={b.id} style={{ padding: '14px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '1rem', color: '#0f172a' }}>{b.name}</div>
-                        {b.description && (
-                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>{b.description}</div>
-                        )}
-                        <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '6px', display: 'flex', gap: '16px' }}>
-                          <span>予算枠: <strong>¥{b.totalAmount.toLocaleString()}</strong></span>
-                          <span>消化額: <strong style={{ color: '#db2777' }}>¥{b.usedAmount.toLocaleString()}</strong></span>
-                          <span>残高: <strong style={{ color: '#059669' }}>¥{b.remainingAmount.toLocaleString()}</strong></span>
+                    <div key={b.id} style={{ padding: '16px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div>
+                          <div style={{ fontWeight: 'bold', fontSize: '1.05rem', color: '#0f172a' }}>{b.name}</div>
+                          {b.description && (
+                            <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>{b.description}</div>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            type="button"
+                            onClick={() => handleOpenConvertModal(b)}
+                            style={{ padding: '6px 12px', backgroundColor: '#fdf2f8', color: '#db2777', border: '1px solid #fbcfe8', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}
+                            title="アマギフと現金の相互振替・換金"
+                          >
+                            🔄 資産振替 (換金)
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleDeleteExtBudget(b.id)}
+                            style={{ padding: '6px 12px', backgroundColor: 'white', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                            title="削除"
+                          >
+                            削除
+                          </button>
                         </div>
                       </div>
 
-                      <button 
-                        onClick={() => handleDeleteExtBudget(b.id)}
-                        style={{ padding: '6px 12px', backgroundColor: 'white', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
-                        title="削除"
-                      >
-                        削除
-                      </button>
+                      {/* 全体サマリー */}
+                      <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '10px', display: 'flex', gap: '16px', padding: '6px 12px', backgroundColor: '#ffffff', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                        <span>総枠: <strong>¥{b.totalAmount.toLocaleString()}</strong></span>
+                        <span>総消化: <strong style={{ color: '#db2777' }}>¥{b.usedAmount.toLocaleString()}</strong></span>
+                        <span>実質残高: <strong style={{ color: '#059669' }}>¥{b.remainingAmount.toLocaleString()}</strong></span>
+                      </div>
+
+                      {/* 形態別残高内訳 */}
+                      <div style={{ marginTop: '10px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', fontSize: '0.8rem' }}>
+                        <div style={{ padding: '8px', backgroundColor: '#eff6ff', borderRadius: '6px', border: '1px solid #bfdbfe' }}>
+                          <div style={{ fontWeight: 'bold', color: '#1e40af' }}>💵 現金</div>
+                          <div style={{ color: '#1e3a8a', fontSize: '0.95rem', fontWeight: 'bold' }}>¥{b.remainingCashAmount.toLocaleString()}</div>
+                          <div style={{ color: '#64748b', fontSize: '0.75rem' }}>枠: ¥{b.cashAmount.toLocaleString()}</div>
+                        </div>
+
+                        <div style={{ padding: '8px', backgroundColor: '#fff7ed', borderRadius: '6px', border: '1px solid #fed7aa' }}>
+                          <div style={{ fontWeight: 'bold', color: '#c2410c' }}>🎁 Amazonギフト</div>
+                          <div style={{ color: '#7c2d12', fontSize: '0.95rem', fontWeight: 'bold' }}>¥{b.remainingAmazonGiftAmount.toLocaleString()}</div>
+                          <div style={{ color: '#64748b', fontSize: '0.75rem' }}>枠: ¥{b.amazonGiftAmount.toLocaleString()}</div>
+                        </div>
+
+                        <div style={{ padding: '8px', backgroundColor: '#f5f3ff', borderRadius: '6px', border: '1px solid #ddd6fe' }}>
+                          <div style={{ fontWeight: 'bold', color: '#6d28d9' }}>🏷️ その他</div>
+                          <div style={{ color: '#4c1d95', fontSize: '0.95rem', fontWeight: 'bold' }}>¥{b.remainingOtherAmount.toLocaleString()}</div>
+                          <div style={{ color: '#64748b', fontSize: '0.75rem' }}>枠: ¥{b.otherAmount.toLocaleString()}</div>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -692,7 +788,7 @@ function FiscalYearSettings() {
                 新しい部費外予算枠を追加
               </h4>
 
-              <form onSubmit={handleCreateExtBudget} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <form onSubmit={handleCreateExtBudget} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>
                     予算枠の名称 <span style={{ color: '#ef4444' }}>*</span>
@@ -700,25 +796,10 @@ function FiscalYearSettings() {
                   <input 
                     type="text" 
                     required 
-                    placeholder="例: OB・OG寄付金、特別助成金、自己負担枠"
+                    placeholder="例: OB・OG寄付金、自由用途プール、大会特別助成"
                     className="form-input"
                     value={newExtBudget.name}
                     onChange={e => setNewExtBudget({ ...newExtBudget, name: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>
-                    予算総額（円） <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <input 
-                    type="number" 
-                    required 
-                    min="0"
-                    placeholder="例: 100000"
-                    className="form-input"
-                    value={newExtBudget.totalAmount}
-                    onChange={e => setNewExtBudget({ ...newExtBudget, totalAmount: e.target.value })}
                   />
                 </div>
 
@@ -728,14 +809,63 @@ function FiscalYearSettings() {
                   </label>
                   <input 
                     type="text" 
-                    placeholder="例: 外部発表支援のための特別枠"
+                    placeholder="例: 自由用途、または備品購入・大会遠征専用など"
                     className="form-input"
                     value={newExtBudget.description}
                     onChange={e => setNewExtBudget({ ...newExtBudget, description: e.target.value })}
                   />
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#334155', marginBottom: '6px' }}>
+                    保有形態別の初期予算枠（円） <span style={{ color: '#ef4444' }}>*いずれか1つ以上</span>
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+                    <div>
+                      <span style={{ fontSize: '0.8rem', color: '#1e40af', fontWeight: 'bold' }}>💵 現金</span>
+                      <input 
+                        type="number" 
+                        min="0"
+                        placeholder="0"
+                        className="form-input"
+                        value={newExtBudget.cashAmount}
+                        onChange={e => setNewExtBudget({ ...newExtBudget, cashAmount: e.target.value })}
+                        style={{ marginTop: '2px' }}
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.8rem', color: '#c2410c', fontWeight: 'bold' }}>🎁 Amazonギフト</span>
+                      <input 
+                        type="number" 
+                        min="0"
+                        placeholder="0"
+                        className="form-input"
+                        value={newExtBudget.amazonGiftAmount}
+                        onChange={e => setNewExtBudget({ ...newExtBudget, amazonGiftAmount: e.target.value })}
+                        style={{ marginTop: '2px' }}
+                      />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.8rem', color: '#6d28d9', fontWeight: 'bold' }}>🏷️ その他</span>
+                      <input 
+                        type="number" 
+                        min="0"
+                        placeholder="0"
+                        className="form-input"
+                        value={newExtBudget.otherAmount}
+                        onChange={e => setNewExtBudget({ ...newExtBudget, otherAmount: e.target.value })}
+                        style={{ marginTop: '2px' }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', marginTop: '6px', fontSize: '0.85rem', color: '#475569' }}>
+                    合計予算総額: <strong style={{ color: '#db2777', fontSize: '1rem' }}>
+                      ¥{((parseInt(newExtBudget.cashAmount, 10) || 0) + (parseInt(newExtBudget.amazonGiftAmount, 10) || 0) + (parseInt(newExtBudget.otherAmount, 10) || 0)).toLocaleString()}
+                    </strong>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
                   <button type="submit" className="primary-btn" style={{ backgroundColor: '#db2777' }}>
                     <Plus size={18} />
                     枠を追加する
@@ -743,6 +873,109 @@ function FiscalYearSettings() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 資産振替（換金）モーダル */}
+      {convertTargetBudget && (
+        <div className="modal-overlay" onClick={() => setConvertTargetBudget(null)} style={{ zIndex: 1100 }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', width: '90%' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#db2777', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                🔄 資産振替・換金処理
+              </h3>
+              <button 
+                onClick={() => setConvertTargetBudget(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ padding: '10px 14px', backgroundColor: '#f8fafc', borderRadius: '6px', marginBottom: '16px', fontSize: '0.85rem', color: '#334155' }}>
+              対象予算: <strong>{convertTargetBudget.name}</strong><br/>
+              現在の残高: 現金 ¥{convertTargetBudget.remainingCashAmount.toLocaleString()} / アマギフ ¥{convertTargetBudget.remainingAmazonGiftAmount.toLocaleString()} / その他 ¥{convertTargetBudget.remainingOtherAmount.toLocaleString()}
+            </div>
+
+            <form onSubmit={handleExecuteConvert} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>振替元 (減額)</label>
+                  <select 
+                    value={convertForm.fromType} 
+                    onChange={e => setConvertForm({ ...convertForm, fromType: parseInt(e.target.value, 10) })}
+                    className="form-input"
+                  >
+                    <option value={1}>💵 現金 (残: ¥{convertTargetBudget.remainingCashAmount.toLocaleString()})</option>
+                    <option value={2}>🎁 Amazonギフト (残: ¥{convertTargetBudget.remainingAmazonGiftAmount.toLocaleString()})</option>
+                    <option value={3}>🏷️ その他 (残: ¥{convertTargetBudget.remainingOtherAmount.toLocaleString()})</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>振替先 (加算)</label>
+                  <select 
+                    value={convertForm.toType} 
+                    onChange={e => setConvertForm({ ...convertForm, toType: parseInt(e.target.value, 10) })}
+                    className="form-input"
+                  >
+                    <option value={1}>💵 現金</option>
+                    <option value={2}>🎁 Amazonギフト</option>
+                    <option value={3}>🏷️ その他</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>振替元から減額する金額 (円)</label>
+                <input 
+                  type="number" 
+                  required 
+                  min="1"
+                  placeholder="例: 10000"
+                  className="form-input"
+                  value={convertForm.amount}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setConvertForm({ ...convertForm, amount: val, convertedAmount: val });
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                  振替先へ加算される金額 (円)
+                  <span style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#64748b', marginLeft: '6px' }}>※換金手数料等がある場合に変更</span>
+                </label>
+                <input 
+                  type="number" 
+                  required 
+                  min="1"
+                  placeholder="例: 9500"
+                  className="form-input"
+                  value={convertForm.convertedAmount}
+                  onChange={e => setConvertForm({ ...convertForm, convertedAmount: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>備考・理由</label>
+                <input 
+                  type="text" 
+                  placeholder="例: 金券ショップで換金、端数受取など"
+                  className="form-input"
+                  value={convertForm.note}
+                  onChange={e => setConvertForm({ ...convertForm, note: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button type="button" className="btn-cancel" onClick={() => setConvertTargetBudget(null)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'white' }}>キャンセル</button>
+                <button type="submit" disabled={isSubmittingConvert} className="primary-btn" style={{ backgroundColor: '#db2777' }}>
+                  {isSubmittingConvert ? '処理中...' : '振替を実行する'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

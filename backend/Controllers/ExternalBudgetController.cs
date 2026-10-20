@@ -42,28 +42,41 @@ public class ExternalBudgetController(AppDbContext context) : ControllerBase
             .OrderBy(b => b.CreatedAt)
             .ToListAsync(cancellationToken);
 
-        // 各部費外予算枠から支出された金額を集計
-        // 対象ステータス: 却下(Rejected)と下書き(Draft)以外の有効な申請
-        var usageByBudget = await context.ExpenseRequests
+        // 各部費外予算枠から支出された金額を形態別に集計
+        // 対象ステータス: 却下(Rejected)と下書き(Draft)と差し戻し(Remanded)以外の有効な申請
+        var validRequests = await context.ExpenseRequests
             .AsNoTracking()
             .Where(r => r.ExternalBudgetId.HasValue && 
                         r.Status != ExpenseStatus.Draft && 
                         r.Status != ExpenseStatus.Rejected && 
                         r.Status != ExpenseStatus.Remanded)
-            .GroupBy(r => r.ExternalBudgetId!.Value)
-            .Select(g => new { BudgetId = g.Key, TotalUsed = g.Sum(r => r.ExternalBudgetAmount) })
-            .ToDictionaryAsync(x => x.BudgetId, x => x.TotalUsed, cancellationToken);
+            .ToListAsync(cancellationToken);
 
-        var result = externalBudgets.Select(b => new ExternalBudgetDto
+        var result = externalBudgets.Select(b =>
         {
-            Id = b.Id,
-            FiscalYearId = b.FiscalYearId,
-            Name = b.Name,
-            TotalAmount = b.TotalAmount,
-            Description = b.Description,
-            UsedAmount = usageByBudget.GetValueOrDefault(b.Id, 0),
-            CreatedAt = b.CreatedAt,
-            UpdatedAt = b.UpdatedAt
+            var reqs = validRequests.Where(r => r.ExternalBudgetId == b.Id).ToList();
+            var usedTotal = reqs.Sum(r => r.ExternalBudgetAmount);
+            var usedCash = reqs.Where(r => !r.ExternalBudgetAssetType.HasValue || r.ExternalBudgetAssetType == ExternalBudgetAssetType.Cash).Sum(r => r.ExternalBudgetAmount);
+            var usedAmazon = reqs.Where(r => r.ExternalBudgetAssetType == ExternalBudgetAssetType.AmazonGift).Sum(r => r.ExternalBudgetAmount);
+            var usedOther = reqs.Where(r => r.ExternalBudgetAssetType == ExternalBudgetAssetType.Other).Sum(r => r.ExternalBudgetAmount);
+
+            return new ExternalBudgetDto
+            {
+                Id = b.Id,
+                FiscalYearId = b.FiscalYearId,
+                Name = b.Name,
+                TotalAmount = b.TotalAmount,
+                CashAmount = b.CashAmount,
+                UsedCashAmount = usedCash,
+                AmazonGiftAmount = b.AmazonGiftAmount,
+                UsedAmazonGiftAmount = usedAmazon,
+                OtherAmount = b.OtherAmount,
+                UsedOtherAmount = usedOther,
+                Description = b.Description,
+                UsedAmount = usedTotal,
+                CreatedAt = b.CreatedAt,
+                UpdatedAt = b.UpdatedAt
+            };
         }).ToList();
 
         return Ok(result);
@@ -84,13 +97,18 @@ public class ExternalBudgetController(AppDbContext context) : ControllerBase
             return NotFound("指定された部費外予算は見つかりません。");
         }
 
-        var usedAmount = await context.ExpenseRequests
+        var reqs = await context.ExpenseRequests
             .AsNoTracking()
             .Where(r => r.ExternalBudgetId == id && 
                         r.Status != ExpenseStatus.Draft && 
                         r.Status != ExpenseStatus.Rejected && 
                         r.Status != ExpenseStatus.Remanded)
-            .SumAsync(r => r.ExternalBudgetAmount, cancellationToken);
+            .ToListAsync(cancellationToken);
+
+        var usedTotal = reqs.Sum(r => r.ExternalBudgetAmount);
+        var usedCash = reqs.Where(r => !r.ExternalBudgetAssetType.HasValue || r.ExternalBudgetAssetType == ExternalBudgetAssetType.Cash).Sum(r => r.ExternalBudgetAmount);
+        var usedAmazon = reqs.Where(r => r.ExternalBudgetAssetType == ExternalBudgetAssetType.AmazonGift).Sum(r => r.ExternalBudgetAmount);
+        var usedOther = reqs.Where(r => r.ExternalBudgetAssetType == ExternalBudgetAssetType.Other).Sum(r => r.ExternalBudgetAmount);
 
         return Ok(new ExternalBudgetDto
         {
@@ -98,8 +116,14 @@ public class ExternalBudgetController(AppDbContext context) : ControllerBase
             FiscalYearId = b.FiscalYearId,
             Name = b.Name,
             TotalAmount = b.TotalAmount,
+            CashAmount = b.CashAmount,
+            UsedCashAmount = usedCash,
+            AmazonGiftAmount = b.AmazonGiftAmount,
+            UsedAmazonGiftAmount = usedAmazon,
+            OtherAmount = b.OtherAmount,
+            UsedOtherAmount = usedOther,
             Description = b.Description,
-            UsedAmount = usedAmount,
+            UsedAmount = usedTotal,
             CreatedAt = b.CreatedAt,
             UpdatedAt = b.UpdatedAt
         });
@@ -118,12 +142,26 @@ public class ExternalBudgetController(AppDbContext context) : ControllerBase
             return BadRequest("指定された年度が存在しません。");
         }
 
+        int cash = dto.CashAmount;
+        int amazon = dto.AmazonGiftAmount;
+        int other = dto.OtherAmount;
+
+        // 内訳がすべて0でTotalAmountが設定されている場合は現金を初期内訳とする
+        if (cash == 0 && amazon == 0 && other == 0 && dto.TotalAmount > 0)
+        {
+            cash = dto.TotalAmount;
+        }
+        int total = cash + amazon + other;
+
         var newBudget = new ExternalBudget
         {
             Id = Guid.NewGuid(),
             FiscalYearId = dto.FiscalYearId,
             Name = dto.Name.Trim(),
-            TotalAmount = dto.TotalAmount,
+            CashAmount = cash,
+            AmazonGiftAmount = amazon,
+            OtherAmount = other,
+            TotalAmount = total,
             Description = dto.Description?.Trim(),
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -138,6 +176,12 @@ public class ExternalBudgetController(AppDbContext context) : ControllerBase
             FiscalYearId = newBudget.FiscalYearId,
             Name = newBudget.Name,
             TotalAmount = newBudget.TotalAmount,
+            CashAmount = newBudget.CashAmount,
+            UsedCashAmount = 0,
+            AmazonGiftAmount = newBudget.AmazonGiftAmount,
+            UsedAmazonGiftAmount = 0,
+            OtherAmount = newBudget.OtherAmount,
+            UsedOtherAmount = 0,
             Description = newBudget.Description,
             UsedAmount = 0,
             CreatedAt = newBudget.CreatedAt,
@@ -159,12 +203,107 @@ public class ExternalBudgetController(AppDbContext context) : ControllerBase
         }
 
         budget.Name = dto.Name.Trim();
-        budget.TotalAmount = dto.TotalAmount;
+        budget.CashAmount = dto.CashAmount;
+        budget.AmazonGiftAmount = dto.AmazonGiftAmount;
+        budget.OtherAmount = dto.OtherAmount;
+        budget.TotalAmount = dto.CashAmount + dto.AmazonGiftAmount + dto.OtherAmount;
         budget.Description = dto.Description?.Trim();
         budget.UpdatedAt = DateTime.UtcNow;
 
         await context.SaveChangesAsync(cancellationToken);
         return NoContent();
+    }
+
+    /// <summary>
+    /// 部費外予算の資産形態間振替（アマギフを現金化、現金をアマギフ化など）を実行します。
+    /// </summary>
+    [HttpPost("{id}/convert")]
+    [RequirePermission(PermissionType.ManageMasterData)]
+    public async Task<ActionResult<ExternalBudgetDto>> ConvertAsset(Guid id, [FromBody] ExternalBudgetConvertDto dto, CancellationToken cancellationToken = default)
+    {
+        var budget = await context.ExternalBudgets.FindAsync(new object[] { id }, cancellationToken);
+        if (budget == null)
+        {
+            return NotFound("指定された部費外予算は見つかりません。");
+        }
+
+        if (dto.FromType == dto.ToType)
+        {
+            return BadRequest("振替元と振替先には異なる形態を指定してください。");
+        }
+
+        // 振替元の現在の使用状況を集計して残高をチェック
+        var reqs = await context.ExpenseRequests
+            .AsNoTracking()
+            .Where(r => r.ExternalBudgetId == id && 
+                        r.Status != ExpenseStatus.Draft && 
+                        r.Status != ExpenseStatus.Rejected && 
+                        r.Status != ExpenseStatus.Remanded)
+            .ToListAsync(cancellationToken);
+
+        int availableFromAmount = dto.FromType switch
+        {
+            ExternalBudgetAssetType.Cash => budget.CashAmount - reqs.Where(r => !r.ExternalBudgetAssetType.HasValue || r.ExternalBudgetAssetType == ExternalBudgetAssetType.Cash).Sum(r => r.ExternalBudgetAmount),
+            ExternalBudgetAssetType.AmazonGift => budget.AmazonGiftAmount - reqs.Where(r => r.ExternalBudgetAssetType == ExternalBudgetAssetType.AmazonGift).Sum(r => r.ExternalBudgetAmount),
+            ExternalBudgetAssetType.Other => budget.OtherAmount - reqs.Where(r => r.ExternalBudgetAssetType == ExternalBudgetAssetType.Other).Sum(r => r.ExternalBudgetAmount),
+            _ => 0
+        };
+
+        if (availableFromAmount < dto.Amount)
+        {
+            return BadRequest($"振替元の残高が不足しています。（振替可能額: ¥{Math.Max(0, availableFromAmount):N0}、振替希望額: ¥{dto.Amount:N0}）");
+        }
+
+        // 振替元から減額
+        switch (dto.FromType)
+        {
+            case ExternalBudgetAssetType.Cash:
+                budget.CashAmount -= dto.Amount;
+                break;
+            case ExternalBudgetAssetType.AmazonGift:
+                budget.AmazonGiftAmount -= dto.Amount;
+                break;
+            case ExternalBudgetAssetType.Other:
+                budget.OtherAmount -= dto.Amount;
+                break;
+        }
+
+        // 振替先へ加算
+        switch (dto.ToType)
+        {
+            case ExternalBudgetAssetType.Cash:
+                budget.CashAmount += dto.ConvertedAmount;
+                break;
+            case ExternalBudgetAssetType.AmazonGift:
+                budget.AmazonGiftAmount += dto.ConvertedAmount;
+                break;
+            case ExternalBudgetAssetType.Other:
+                budget.OtherAmount += dto.ConvertedAmount;
+                break;
+        }
+
+        budget.TotalAmount = budget.CashAmount + budget.AmazonGiftAmount + budget.OtherAmount;
+        budget.UpdatedAt = DateTime.UtcNow;
+
+        var userIdString = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        Guid.TryParse(userIdString, out var currentUserId);
+
+        var fromName = dto.FromType switch { ExternalBudgetAssetType.Cash => "現金", ExternalBudgetAssetType.AmazonGift => "Amazonギフトカード", _ => "その他" };
+        var toName = dto.ToType switch { ExternalBudgetAssetType.Cash => "現金", ExternalBudgetAssetType.AmazonGift => "Amazonギフトカード", _ => "その他" };
+
+        context.AuditLogs.Add(new AuditLog
+        {
+            TargetType = "ExternalBudgets",
+            TargetId = budget.Id,
+            UserId = currentUserId,
+            Action = "CONVERT_ASSET",
+            NewValue = $"[{budget.Name}] {fromName} ¥{dto.Amount:N0} → {toName} ¥{dto.ConvertedAmount:N0} へ振替（メモ: {dto.Note ?? "なし"}）"
+        });
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        // 最新の集計結果を返却
+        return await GetExternalBudgetById(id, cancellationToken);
     }
 
     /// <summary>

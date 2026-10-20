@@ -43,6 +43,7 @@ function ApplicationDetail() {
   const [assignExternalBudget, setAssignExternalBudget] = useState(false);
   const [selectedExternalBudgetId, setSelectedExternalBudgetId] = useState('');
   const [externalBudgetAmount, setExternalBudgetAmount] = useState(0);
+  const [externalBudgetAssetType, setExternalBudgetAssetType] = useState('Cash'); // 'Cash' | 'AmazonGift' | 'Other'
 
   // University Rejection Modal State (大学却下・救済用)
   const [showUnivRejectModal, setShowUnivRejectModal] = useState(false);
@@ -50,6 +51,7 @@ function ApplicationDetail() {
   const [univRejectReason, setUnivRejectReason] = useState('');
   const [univExternalBudgetId, setUnivExternalBudgetId] = useState('');
   const [univExternalBudgetAmount, setUnivExternalBudgetAmount] = useState(0);
+  const [univExternalBudgetAssetType, setUnivExternalBudgetAssetType] = useState('Cash');
 
   const token = localStorage.getItem('authToken');
   const decodedToken = token ? jwtDecode(token) : null;
@@ -335,7 +337,8 @@ function ApplicationDetail() {
         const payload = {
           status: 'Approved',
           externalBudgetAmount: assignExternalBudget ? Number(externalBudgetAmount) : 0,
-          externalBudgetId: (assignExternalBudget && selectedExternalBudgetId) ? selectedExternalBudgetId : null
+          externalBudgetId: (assignExternalBudget && selectedExternalBudgetId) ? selectedExternalBudgetId : null,
+          externalBudgetAssetType: assignExternalBudget ? externalBudgetAssetType : null
         };
         await api.put(`/Expense/${id}/approve`, payload);
       }
@@ -378,6 +381,7 @@ function ApplicationDetail() {
           status: 'Settled',
           externalBudgetAmount: extAmt,
           externalBudgetId: univExternalBudgetId,
+          externalBudgetAssetType: univExternalBudgetAssetType,
           rejectionReason: univRejectReason ? `大学不認可のため部費外予算へ振替: ${univRejectReason}` : '大学不認可のため部費外予算へ振替'
         });
         alert('部費外予算に振り替え、精算完了として更新しました。部費予算は消費されません。');
@@ -593,7 +597,9 @@ function ApplicationDetail() {
                       部費負担: ¥{(app.totalAmount - app.externalBudgetAmount).toLocaleString()}
                     </span>
                     <span style={{ backgroundColor: '#fdf2f8', color: '#9d174d', padding: '4px 10px', borderRadius: '6px', fontWeight: 'bold' }}>
-                      部費外充当: ¥{app.externalBudgetAmount.toLocaleString()} ({app.externalBudget?.name || '部費外予算'})
+                      部費外充当: ¥{app.externalBudgetAmount.toLocaleString()} ({app.externalBudget?.name || '部費外予算'}
+                      {app.externalBudgetAssetType === 2 || app.externalBudgetAssetType === 'AmazonGift' ? ' - 🎁 Amazonギフトカード' :
+                       app.externalBudgetAssetType === 3 || app.externalBudgetAssetType === 'Other' ? ' - 🏷️ その他' : ' - 💵 現金'})
                     </span>
                   </div>
                 )}
@@ -1045,51 +1051,117 @@ function ApplicationDetail() {
                   部費外予算（OB・OG寄付金・特別助成等）を充当する
                 </label>
 
-                {assignExternalBudget && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <div>
-                      <label style={{ fontSize: '0.85rem', color: '#4b5563', display: 'block', marginBottom: '4px' }}>充当先の部費外予算枠</label>
-                      <select 
-                        value={selectedExternalBudgetId} 
-                        onChange={e => setSelectedExternalBudgetId(e.target.value)}
-                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                      >
-                        {externalBudgets.length === 0 ? (
-                          <option value="">登録済みの部費外予算がありません</option>
-                        ) : (
-                          externalBudgets.map(b => (
-                            <option key={b.id} value={b.id}>
-                              {b.name} (残高: ¥{b.remainingAmount?.toLocaleString()} / 枠: ¥{b.totalAmount?.toLocaleString()})
-                            </option>
-                          ))
+                {assignExternalBudget && (() => {
+                  const curBudget = externalBudgets.find(b => b.id === selectedExternalBudgetId);
+                  const cashRem = curBudget?.remainingCashAmount ?? 0;
+                  const amazonRem = curBudget?.remainingAmazonGiftAmount ?? 0;
+                  const otherRem = curBudget?.remainingOtherAmount ?? 0;
+                  const selectedRem = externalBudgetAssetType === 'AmazonGift' ? amazonRem : (externalBudgetAssetType === 'Other' ? otherRem : cashRem);
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                      <div>
+                        <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#4b5563', display: 'block', marginBottom: '4px' }}>充当先の部費外予算枠</label>
+                        <select 
+                          value={selectedExternalBudgetId} 
+                          onChange={e => setSelectedExternalBudgetId(e.target.value)}
+                          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
+                        >
+                          {externalBudgets.length === 0 ? (
+                            <option value="">登録済みの部費外予算がありません</option>
+                          ) : (
+                            externalBudgets.map(b => (
+                              <option key={b.id} value={b.id}>
+                                {b.name} (残高: ¥{b.remainingAmount?.toLocaleString()} / 枠: ¥{b.totalAmount?.toLocaleString()})
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      </div>
+
+                      {curBudget && (
+                        <div>
+                          <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#4b5563', display: 'block', marginBottom: '6px' }}>使用する資産形態を選択</label>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                            <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', border: externalBudgetAssetType === 'Cash' ? '2px solid #2563eb' : '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', backgroundColor: externalBudgetAssetType === 'Cash' ? '#eff6ff' : 'white', textAlign: 'center' }}>
+                              <input type="radio" name="extAssetType" value="Cash" checked={externalBudgetAssetType === 'Cash'} onChange={() => setExternalBudgetAssetType('Cash')} style={{ display: 'none' }} />
+                              <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#1e40af' }}>💵 現金</span>
+                              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>残: ¥{cashRem.toLocaleString()}</span>
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', border: externalBudgetAssetType === 'AmazonGift' ? '2px solid #ea580c' : '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', backgroundColor: externalBudgetAssetType === 'AmazonGift' ? '#fff7ed' : 'white', textAlign: 'center' }}>
+                              <input type="radio" name="extAssetType" value="AmazonGift" checked={externalBudgetAssetType === 'AmazonGift'} onChange={() => setExternalBudgetAssetType('AmazonGift')} style={{ display: 'none' }} />
+                              <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#c2410c' }}>🎁 アマギフ</span>
+                              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>残: ¥{amazonRem.toLocaleString()}</span>
+                            </label>
+                            <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', border: externalBudgetAssetType === 'Other' ? '2px solid #7c3aed' : '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', backgroundColor: externalBudgetAssetType === 'Other' ? '#f5f3ff' : 'white', textAlign: 'center' }}>
+                              <input type="radio" name="extAssetType" value="Other" checked={externalBudgetAssetType === 'Other'} onChange={() => setExternalBudgetAssetType('Other')} style={{ display: 'none' }} />
+                              <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#6d28d9' }}>🏷️ その他</span>
+                              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>残: ¥{otherRem.toLocaleString()}</span>
+                            </label>
+                          </div>
+                        </div>
+                      )}
+
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#4b5563' }}>部費外充当金額 (円)</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const maxPossible = Math.min(app.totalAmount || 0, selectedRem);
+                              setExternalBudgetAmount(maxPossible > 0 ? maxPossible : (app.totalAmount || 0));
+                            }}
+                            style={{
+                              padding: '2px 10px',
+                              fontSize: '0.75rem',
+                              backgroundColor: '#ec4899',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontWeight: 'bold',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title="申請総額（または選択形態の残高上限）を自動入力"
+                          >
+                            ⚡ 全額を割り当てる (¥{app.totalAmount?.toLocaleString()})
+                          </button>
+                        </div>
+                        <input 
+                          type="number" 
+                          value={externalBudgetAmount} 
+                          onChange={e => setExternalBudgetAmount(e.target.value)} 
+                          max={app.totalAmount}
+                          min={0}
+                          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1.05rem', fontWeight: 'bold' }}
+                        />
+                        {Number(externalBudgetAmount) > selectedRem && (
+                          <div style={{ color: '#dc2626', fontSize: '0.75rem', marginTop: '4px', fontWeight: 'bold' }}>
+                            ⚠️ 選択した形態の残高（¥{selectedRem.toLocaleString()}）を超過しています。
+                          </div>
                         )}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.85rem', color: '#4b5563', display: 'block', marginBottom: '4px' }}>部費外充当金額 (円)</label>
-                      <input 
-                        type="number" 
-                        value={externalBudgetAmount} 
-                        onChange={e => setExternalBudgetAmount(e.target.value)} 
-                        max={app.totalAmount}
-                        min={0}
-                        style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '1rem', fontWeight: 'bold' }}
-                      />
-                    </div>
-
-                    <div style={{ padding: '10px', backgroundColor: '#ffffff', borderRadius: '6px', fontSize: '0.85rem', border: '1px solid #e2e8f0' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <span>部費負担分:</span>
-                        <strong style={{ color: '#2563eb' }}>¥{Math.max(0, (app.totalAmount || 0) - (Number(externalBudgetAmount) || 0)).toLocaleString()}</strong>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>部費外充当分:</span>
-                        <strong style={{ color: '#db2777' }}>¥{(Number(externalBudgetAmount) || 0).toLocaleString()}</strong>
+
+                      <div style={{ padding: '10px', backgroundColor: '#ffffff', borderRadius: '6px', fontSize: '0.85rem', border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span>部費負担分:</span>
+                          <strong style={{ color: '#2563eb' }}>¥{Math.max(0, (app.totalAmount || 0) - (Number(externalBudgetAmount) || 0)).toLocaleString()}</strong>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>部費外充当分:</span>
+                          <strong style={{ color: '#db2777' }}>
+                            ¥{(Number(externalBudgetAmount) || 0).toLocaleString()}
+                            <span style={{ fontSize: '0.75rem', marginLeft: '6px', color: '#6b7280' }}>
+                              ({externalBudgetAssetType === 'AmazonGift' ? '🎁 Amazonギフトカード' : (externalBudgetAssetType === 'Other' ? '🏷️ その他' : '💵 現金')})
+                            </span>
+                          </strong>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
 
@@ -1163,35 +1235,97 @@ function ApplicationDetail() {
               </div>
             </div>
 
-            {univRejectAction === 'SwitchToExternal' && (
-              <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#fdf2f8', borderRadius: '8px', border: '1px solid #fbcfe8' }}>
-                <div style={{ marginBottom: '10px' }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#831843', display: 'block', marginBottom: '4px' }}>振替先の部費外予算</label>
-                  <select 
-                    value={univExternalBudgetId} 
-                    onChange={e => setUnivExternalBudgetId(e.target.value)}
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #f472b6' }}
-                  >
-                    {externalBudgets.map(b => (
-                      <option key={b.id} value={b.id}>
-                        {b.name} (残高: ¥{b.remainingAmount?.toLocaleString()})
-                      </option>
-                    ))}
-                  </select>
+            {univRejectAction === 'SwitchToExternal' && (() => {
+              const curBudget = externalBudgets.find(b => b.id === univExternalBudgetId);
+              const cashRem = curBudget?.remainingCashAmount ?? 0;
+              const amazonRem = curBudget?.remainingAmazonGiftAmount ?? 0;
+              const otherRem = curBudget?.remainingOtherAmount ?? 0;
+              const selectedRem = univExternalBudgetAssetType === 'AmazonGift' ? amazonRem : (univExternalBudgetAssetType === 'Other' ? otherRem : cashRem);
+
+              return (
+                <div style={{ marginBottom: '16px', padding: '14px', backgroundColor: '#fdf2f8', borderRadius: '8px', border: '1px solid #fbcfe8', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#831843', display: 'block', marginBottom: '4px' }}>振替先の部費外予算</label>
+                    <select 
+                      value={univExternalBudgetId} 
+                      onChange={e => setUnivExternalBudgetId(e.target.value)}
+                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #f472b6' }}
+                    >
+                      {externalBudgets.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} (残高: ¥{b.remainingAmount?.toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {curBudget && (
+                    <div>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#831843', display: 'block', marginBottom: '6px' }}>使用する資産形態を選択</label>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', border: univExternalBudgetAssetType === 'Cash' ? '2px solid #2563eb' : '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', backgroundColor: univExternalBudgetAssetType === 'Cash' ? '#eff6ff' : 'white', textAlign: 'center' }}>
+                          <input type="radio" name="univAssetType" value="Cash" checked={univExternalBudgetAssetType === 'Cash'} onChange={() => setUnivExternalBudgetAssetType('Cash')} style={{ display: 'none' }} />
+                          <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#1e40af' }}>💵 現金</span>
+                          <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>残: ¥{cashRem.toLocaleString()}</span>
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', border: univExternalBudgetAssetType === 'AmazonGift' ? '2px solid #ea580c' : '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', backgroundColor: univExternalBudgetAssetType === 'AmazonGift' ? '#fff7ed' : 'white', textAlign: 'center' }}>
+                          <input type="radio" name="univAssetType" value="AmazonGift" checked={univExternalBudgetAssetType === 'AmazonGift'} onChange={() => setUnivExternalBudgetAssetType('AmazonGift')} style={{ display: 'none' }} />
+                          <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#c2410c' }}>🎁 アマギフ</span>
+                          <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>残: ¥{amazonRem.toLocaleString()}</span>
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 4px', border: univExternalBudgetAssetType === 'Other' ? '2px solid #7c3aed' : '1px solid #cbd5e1', borderRadius: '6px', cursor: 'pointer', backgroundColor: univExternalBudgetAssetType === 'Other' ? '#f5f3ff' : 'white', textAlign: 'center' }}>
+                          <input type="radio" name="univAssetType" value="Other" checked={univExternalBudgetAssetType === 'Other'} onChange={() => setUnivExternalBudgetAssetType('Other')} style={{ display: 'none' }} />
+                          <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#6d28d9' }}>🏷️ その他</span>
+                          <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>残: ¥{otherRem.toLocaleString()}</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#831843' }}>振替充当額 (円)</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const maxPossible = Math.min(app.totalAmount || 0, selectedRem);
+                          setUnivExternalBudgetAmount(maxPossible > 0 ? maxPossible : (app.totalAmount || 0));
+                        }}
+                        style={{
+                          padding: '2px 10px',
+                          fontSize: '0.75rem',
+                          backgroundColor: '#be185d',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                        title="申請総額（または選択形態の残高上限）を自動入力"
+                      >
+                        ⚡ 全額を割り当てる (¥{app.totalAmount?.toLocaleString()})
+                      </button>
+                    </div>
+                    <input 
+                      type="number" 
+                      value={univExternalBudgetAmount} 
+                      onChange={e => setUnivExternalBudgetAmount(e.target.value)}
+                      max={app.totalAmount}
+                      min={1}
+                      style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #f472b6', fontWeight: 'bold', fontSize: '1.05rem' }}
+                    />
+                    {Number(univExternalBudgetAmount) > selectedRem && (
+                      <div style={{ color: '#dc2626', fontSize: '0.75rem', marginTop: '4px', fontWeight: 'bold' }}>
+                        ⚠️ 選択した形態の残高（¥{selectedRem.toLocaleString()}）を超過しています。
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#831843', display: 'block', marginBottom: '4px' }}>振替充当額 (円)</label>
-                  <input 
-                    type="number" 
-                    value={univExternalBudgetAmount} 
-                    onChange={e => setUnivExternalBudgetAmount(e.target.value)}
-                    max={app.totalAmount}
-                    min={1}
-                    style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #f472b6', fontWeight: 'bold' }}
-                  />
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div className="modal-form-group" style={{ marginBottom: '20px' }}>
               <label style={{fontWeight: 'bold', display: 'block', marginBottom: '6px'}}>

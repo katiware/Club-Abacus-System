@@ -18,6 +18,11 @@ public class ExternalBudget
     [Required]
     public int TotalAmount { get; set; } = 0; // 予算枠総額（円）
 
+    // 形態別の内訳保有額（円）
+    public int CashAmount { get; set; } = 0;       // 現金枠
+    public int AmazonGiftAmount { get; set; } = 0; // Amazonギフトカード枠
+    public int OtherAmount { get; set; } = 0;      // その他枠
+
     [MaxLength(500)]
     public string? Description { get; set; } // 備考・使途説明
 

@@ -702,6 +702,42 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
                 {
                     return BadRequest("部費外充当金額は0円以上、申請総額以下である必要があります。");
                 }
+
+                if (dto.ExternalBudgetId.HasValue && dto.ExternalBudgetAmount.Value > 0)
+                {
+                    var budget = await context.ExternalBudgets.FindAsync(new object[] { dto.ExternalBudgetId.Value }, cancellationToken);
+                    if (budget == null)
+                    {
+                        return BadRequest("指定された部費外予算が存在しません。");
+                    }
+                    var assetType = dto.ExternalBudgetAssetType ?? ExternalBudgetAssetType.Cash;
+                    var otherUsed = await context.ExpenseRequests
+                        .Where(r => r.ExternalBudgetId == budget.Id && r.Id != expenseRequest.Id &&
+                                    r.Status != ExpenseStatus.Draft && r.Status != ExpenseStatus.Rejected && r.Status != ExpenseStatus.Remanded)
+                        .Where(r => (!r.ExternalBudgetAssetType.HasValue && assetType == ExternalBudgetAssetType.Cash) || r.ExternalBudgetAssetType == assetType)
+                        .SumAsync(r => r.ExternalBudgetAmount, cancellationToken);
+
+                    int maxAvailable = assetType switch
+                    {
+                        ExternalBudgetAssetType.Cash => budget.CashAmount - otherUsed,
+                        ExternalBudgetAssetType.AmazonGift => budget.AmazonGiftAmount - otherUsed,
+                        ExternalBudgetAssetType.Other => budget.OtherAmount - otherUsed,
+                        _ => 0
+                    };
+
+                    if (dto.ExternalBudgetAmount.Value > maxAvailable)
+                    {
+                        var typeName = assetType switch { ExternalBudgetAssetType.Cash => "現金", ExternalBudgetAssetType.AmazonGift => "Amazonギフトカード", _ => "その他" };
+                        return BadRequest($"部費外予算「{budget.Name}」の{typeName}残高（¥{Math.Max(0, maxAvailable):N0}）を超過しています。");
+                    }
+
+                    expenseRequest.ExternalBudgetAssetType = assetType;
+                }
+                else
+                {
+                    expenseRequest.ExternalBudgetAssetType = null;
+                }
+
                 expenseRequest.ExternalBudgetAmount = dto.ExternalBudgetAmount.Value;
                 expenseRequest.ExternalBudgetId = dto.ExternalBudgetId;
             }
@@ -713,7 +749,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             TargetId = expenseRequest.Id,
             UserId = currentUserId,
             Action = $"STATUS_CHANGE_{dto.Status.ToString().ToUpper()}",
-            NewValue = $"Status={dto.Status}, ExternalBudgetAmount={expenseRequest.ExternalBudgetAmount}"
+            NewValue = $"Status={dto.Status}, ExternalBudgetAmount={expenseRequest.ExternalBudgetAmount}, AssetType={expenseRequest.ExternalBudgetAssetType}"
         });
 
         await context.SaveChangesAsync(cancellationToken);
@@ -798,6 +834,42 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
                 {
                     return BadRequest("部費外充当金額は0円以上、申請総額以下である必要があります。");
                 }
+
+                if (dto.ExternalBudgetId.HasValue && dto.ExternalBudgetAmount.Value > 0)
+                {
+                    var budget = await context.ExternalBudgets.FindAsync(new object[] { dto.ExternalBudgetId.Value }, cancellationToken);
+                    if (budget == null)
+                    {
+                        return BadRequest("指定された部費外予算が存在しません。");
+                    }
+                    var assetType = dto.ExternalBudgetAssetType ?? ExternalBudgetAssetType.Cash;
+                    var otherUsed = await context.ExpenseRequests
+                        .Where(r => r.ExternalBudgetId == budget.Id && r.Id != expenseRequest.Id &&
+                                    r.Status != ExpenseStatus.Draft && r.Status != ExpenseStatus.Rejected && r.Status != ExpenseStatus.Remanded)
+                        .Where(r => (!r.ExternalBudgetAssetType.HasValue && assetType == ExternalBudgetAssetType.Cash) || r.ExternalBudgetAssetType == assetType)
+                        .SumAsync(r => r.ExternalBudgetAmount, cancellationToken);
+
+                    int maxAvailable = assetType switch
+                    {
+                        ExternalBudgetAssetType.Cash => budget.CashAmount - otherUsed,
+                        ExternalBudgetAssetType.AmazonGift => budget.AmazonGiftAmount - otherUsed,
+                        ExternalBudgetAssetType.Other => budget.OtherAmount - otherUsed,
+                        _ => 0
+                    };
+
+                    if (dto.ExternalBudgetAmount.Value > maxAvailable)
+                    {
+                        var typeName = assetType switch { ExternalBudgetAssetType.Cash => "現金", ExternalBudgetAssetType.AmazonGift => "Amazonギフトカード", _ => "その他" };
+                        return BadRequest($"部費外予算「{budget.Name}」の{typeName}残高（¥{Math.Max(0, maxAvailable):N0}）を超過しています。");
+                    }
+
+                    expenseRequest.ExternalBudgetAssetType = assetType;
+                }
+                else
+                {
+                    expenseRequest.ExternalBudgetAssetType = null;
+                }
+
                 expenseRequest.ExternalBudgetAmount = dto.ExternalBudgetAmount.Value;
                 expenseRequest.ExternalBudgetId = dto.ExternalBudgetId;
             }

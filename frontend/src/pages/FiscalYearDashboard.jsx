@@ -300,6 +300,21 @@ function FiscalYearDashboard() {
                       <div style={{ width: '100%', height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ width: `${usedPct}%`, height: '100%', backgroundColor: '#ec4899', transition: 'width 0.4s' }} />
                       </div>
+
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #f1f5f9', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', fontSize: '0.75rem' }}>
+                        <div style={{ backgroundColor: '#eff6ff', padding: '4px 6px', borderRadius: '4px' }}>
+                          <span style={{ color: '#1e40af', fontWeight: 'bold' }}>💵 現金</span><br/>
+                          <span style={{ fontWeight: 'bold', color: '#1e3a8a' }}>¥{(b.remainingCashAmount || 0).toLocaleString()}</span>
+                        </div>
+                        <div style={{ backgroundColor: '#fff7ed', padding: '4px 6px', borderRadius: '4px' }}>
+                          <span style={{ color: '#c2410c', fontWeight: 'bold' }}>🎁 アマギフ</span><br/>
+                          <span style={{ fontWeight: 'bold', color: '#7c2d12' }}>¥{(b.remainingAmazonGiftAmount || 0).toLocaleString()}</span>
+                        </div>
+                        <div style={{ backgroundColor: '#f5f3ff', padding: '4px 6px', borderRadius: '4px' }}>
+                          <span style={{ color: '#6d28d9', fontWeight: 'bold' }}>🏷️ その他</span><br/>
+                          <span style={{ fontWeight: 'bold', color: '#4c1d95' }}>¥{(b.remainingOtherAmount || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}

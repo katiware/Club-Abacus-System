@@ -32,6 +32,8 @@ public class ExpenseRequest
 
     public Guid? ExternalBudgetId { get; set; } // 充当先の部費外予算ID
 
+    public ExternalBudgetAssetType? ExternalBudgetAssetType { get; set; } // 充当形態（現金・アマギフ・その他）
+
     [NotMapped]
     public int ClubBudgetAmount => Math.Max(0, TotalAmount - ExternalBudgetAmount); // 部費実質負担額
 
