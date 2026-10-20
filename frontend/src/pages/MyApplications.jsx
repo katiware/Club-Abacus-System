@@ -205,6 +205,11 @@ function MyApplications() {
                   <span className="app-amount">
                     {app.isAmountVariable && !app.isAmountFinalized ? `~¥${app.totalAmount.toLocaleString()} (目安)` : `¥${app.totalAmount.toLocaleString()}`}
                   </span>
+                  {app.externalBudgetAmount > 0 && (
+                    <span style={{ fontSize: '0.8rem', backgroundColor: '#fdf2f8', color: '#9d174d', padding: '2px 8px', borderRadius: '4px', marginLeft: '8px', fontWeight: 'bold' }}>
+                      うち部費外充当: ¥{app.externalBudgetAmount.toLocaleString()}
+                    </span>
+                  )}
                   {app.isAmountVariable && !app.isAmountFinalized && (
                     <span className="status-badge warning" style={{backgroundColor: '#ffeeba', color: '#856404', marginLeft: '8px', fontSize: '11px'}}>金額未確定</span>
                   )}

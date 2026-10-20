@@ -9,4 +9,8 @@ public class ExpenseStatusUpdateDto
     public ExpenseStatus Status { get; set; }
 
     public string? RejectionReason { get; set; }
+
+    public int? ExternalBudgetAmount { get; set; }
+
+    public Guid? ExternalBudgetId { get; set; }
 }

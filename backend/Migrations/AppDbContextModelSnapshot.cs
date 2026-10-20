@@ -183,6 +183,12 @@ namespace Club_Abacus_System.Migrations
                     b.Property<string>("EditReason")
                         .HasColumnType("text");
 
+                    b.Property<int>("ExternalBudgetAmount")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("ExternalBudgetId")
+                        .HasColumnType("uuid");
+
                     b.Property<bool>("IsAmountFinalized")
                         .HasColumnType("boolean");
 
@@ -235,6 +241,8 @@ namespace Club_Abacus_System.Migrations
 
                     b.HasIndex("ApprovedById");
 
+                    b.HasIndex("ExternalBudgetId");
+
                     b.HasIndex("RecurringTemplateId");
 
                     b.HasIndex("UniversitySubmissionBatchId");
@@ -242,6 +250,40 @@ namespace Club_Abacus_System.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("ExpenseRequests");
+                });
+
+            modelBuilder.Entity("Club_Abacus_System.Models.ExternalBudget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("FiscalYearId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("TotalAmount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FiscalYearId");
+
+                    b.ToTable("ExternalBudgets");
                 });
 
             modelBuilder.Entity("Club_Abacus_System.Models.FiscalYear", b =>
@@ -658,6 +700,11 @@ namespace Club_Abacus_System.Migrations
                         .WithMany()
                         .HasForeignKey("ApprovedById");
 
+                    b.HasOne("Club_Abacus_System.Models.ExternalBudget", "ExternalBudget")
+                        .WithMany("ExpenseRequests")
+                        .HasForeignKey("ExternalBudgetId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Club_Abacus_System.Models.RecurringExpenseTemplate", "RecurringTemplate")
                         .WithMany("GeneratedRequests")
                         .HasForeignKey("RecurringTemplateId")
@@ -676,11 +723,24 @@ namespace Club_Abacus_System.Migrations
 
                     b.Navigation("ApprovedBy");
 
+                    b.Navigation("ExternalBudget");
+
                     b.Navigation("RecurringTemplate");
 
                     b.Navigation("UniversitySubmissionBatch");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Club_Abacus_System.Models.ExternalBudget", b =>
+                {
+                    b.HasOne("Club_Abacus_System.Models.FiscalYear", "FiscalYear")
+                        .WithMany("ExternalBudgets")
+                        .HasForeignKey("FiscalYearId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FiscalYear");
                 });
 
             modelBuilder.Entity("Club_Abacus_System.Models.RecurringExpenseTemplate", b =>
@@ -772,6 +832,16 @@ namespace Club_Abacus_System.Migrations
                     b.Navigation("ExpenseDocuments");
 
                     b.Navigation("ExpenseItems");
+                });
+
+            modelBuilder.Entity("Club_Abacus_System.Models.ExternalBudget", b =>
+                {
+                    b.Navigation("ExpenseRequests");
+                });
+
+            modelBuilder.Entity("Club_Abacus_System.Models.FiscalYear", b =>
+                {
+                    b.Navigation("ExternalBudgets");
                 });
 
             modelBuilder.Entity("Club_Abacus_System.Models.RecurringExpenseTemplate", b =>

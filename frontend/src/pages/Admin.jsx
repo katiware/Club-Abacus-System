@@ -89,7 +89,14 @@ function Admin() {
                     <td>{new Date(app.createdAt).toLocaleDateString()}</td>
                     <td>{app.user?.name || '不明'}</td>
                     <td className="cell-title">{getTitle(app)}</td>
-                    <td className="cell-amount">¥{app.totalAmount.toLocaleString()}</td>
+                    <td className="cell-amount">
+                      <div>¥{app.totalAmount.toLocaleString()}</div>
+                      {app.externalBudgetAmount > 0 && (
+                        <div style={{ fontSize: '0.75rem', color: '#db2777', marginTop: '2px' }}>
+                          部費: ¥{(app.totalAmount - app.externalBudgetAmount).toLocaleString()} / 外: ¥{app.externalBudgetAmount.toLocaleString()}
+                        </div>
+                      )}
+                    </td>
                     <td>
                       <span className={`badge ${app.type === 'Advance' ? 'badge-advance' : 'badge-reimburse'}`}>
                         {getTypeStr(app.type)}

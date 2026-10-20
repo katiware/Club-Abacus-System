@@ -277,7 +277,14 @@ function AllApplications() {
                     <td className="font-medium">{app.user?.name || '不明'}</td>
                     <td>{getTitle(app)}</td>
                     <td><span className={`type-badge ${app.type === 'Advance' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>{getTypeStr(app.type)}</span></td>
-                    <td className="font-medium text-right">¥{app.totalAmount.toLocaleString()}</td>
+                    <td className="font-medium text-right">
+                      <div>¥{app.totalAmount.toLocaleString()}</div>
+                      {app.externalBudgetAmount > 0 && (
+                        <div style={{ fontSize: '0.75rem', color: '#db2777', marginTop: '2px' }} title={`うち部費外充当: ¥${app.externalBudgetAmount.toLocaleString()}`}>
+                          部費: ¥{(app.totalAmount - app.externalBudgetAmount).toLocaleString()} / 外: ¥{app.externalBudgetAmount.toLocaleString()}
+                        </div>
+                      )}
+                    </td>
                     <td>{getStatusBadge(app)}</td>
                     <td>
                       <button 

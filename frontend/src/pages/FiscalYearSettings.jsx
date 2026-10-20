@@ -30,6 +30,60 @@ function FiscalYearSettings() {
   });
   const [isEditingSubmitting, setIsEditingSubmitting] = useState(false);
 
+  // 部費外予算管理モーダル用の状態
+  const [targetYearForExternalBudget, setTargetYearForExternalBudget] = useState(null);
+  const [extBudgetsList, setExtBudgetsList] = useState([]);
+  const [isLoadingExtBudgets, setIsLoadingExtBudgets] = useState(false);
+  const [newExtBudget, setNewExtBudget] = useState({ name: '', totalAmount: '', description: '' });
+
+  const fetchExternalBudgetsForYear = async (fyId) => {
+    setIsLoadingExtBudgets(true);
+    try {
+      const res = await api.get(`/ExternalBudget?fiscalYearId=${fyId}`);
+      setExtBudgetsList(res.data || []);
+    } catch (err) {
+      console.error(err);
+      alert('部費外予算の取得に失敗しました。');
+    } finally {
+      setIsLoadingExtBudgets(false);
+    }
+  };
+
+  const handleOpenExternalBudgetModal = (fy) => {
+    setTargetYearForExternalBudget(fy);
+    setNewExtBudget({ name: '', totalAmount: '', description: '' });
+    fetchExternalBudgetsForYear(fy.id);
+  };
+
+  const handleCreateExtBudget = async (e) => {
+    e.preventDefault();
+    if (!targetYearForExternalBudget) return;
+    try {
+      await api.post('/ExternalBudget', {
+        fiscalYearId: targetYearForExternalBudget.id,
+        name: newExtBudget.name,
+        totalAmount: parseInt(newExtBudget.totalAmount, 10),
+        description: newExtBudget.description
+      });
+      setNewExtBudget({ name: '', totalAmount: '', description: '' });
+      await fetchExternalBudgetsForYear(targetYearForExternalBudget.id);
+    } catch (err) {
+      console.error(err);
+      alert(`エラー: ${err.response?.data?.message || err.response?.data || '部費外予算の登録に失敗しました'}`);
+    }
+  };
+
+  const handleDeleteExtBudget = async (budgetId) => {
+    if (!window.confirm('この部費外予算を削除しますか？\n（※すでに申請で使用されている場合は削除できません）')) return;
+    try {
+      await api.delete(`/ExternalBudget/${budgetId}`);
+      await fetchExternalBudgetsForYear(targetYearForExternalBudget.id);
+    } catch (err) {
+      console.error(err);
+      alert(`エラー: ${err.response?.data || '削除に失敗しました'}`);
+    }
+  };
+
   const fetchFiscalYears = async () => {
     setIsLoading(true);
     try {
@@ -366,6 +420,16 @@ function FiscalYearSettings() {
                         >
                           📊 ダッシュボード
                         </button>
+                        <button 
+                          className="secondary-btn" 
+                          style={{ color: '#db2777', borderColor: '#f472b6' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenExternalBudgetModal(fy);
+                          }}
+                        >
+                          💰 部費外予算の管理
+                        </button>
 
                         {/* 開始前年度 */}
                         {!fy.isClosed && !fy.isActive && (
@@ -556,6 +620,129 @@ function FiscalYearSettings() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 部費外予算の管理モーダル */}
+      {targetYearForExternalBudget && (
+        <div className="modal-overlay" onClick={() => setTargetYearForExternalBudget(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '650px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #f1f5f9', paddingBottom: '12px', marginBottom: '20px' }}>
+              <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#831843', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                💰 【{targetYearForExternalBudget.yearName}】部費外予算の管理
+              </h3>
+              <button 
+                onClick={() => setTargetYearForExternalBudget(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '20px', lineHeight: '1.6' }}>
+              OB・OG寄付金、特別助成金、自己負担枠など、部費（大学配分予算）とは別の財源を登録・管理できます。<br/>
+              主将会計・管理者は、申請の事前承認時や大学不承認時にこれらの枠から充当・振替することができます。
+            </p>
+
+            {/* 登録済み部費外予算一覧 */}
+            <div style={{ marginBottom: '28px' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#334155', marginBottom: '12px' }}>
+                登録済みの部費外予算枠 ({extBudgetsList.length}件)
+              </h4>
+
+              {isLoadingExtBudgets ? (
+                <p style={{ color: '#64748b', fontSize: '0.9rem' }}>読み込み中...</p>
+              ) : extBudgetsList.length === 0 ? (
+                <div style={{ padding: '16px', backgroundColor: '#fdf2f8', borderRadius: '8px', color: '#9d174d', fontSize: '0.9rem', textAlign: 'center' }}>
+                  現在登録されている部費外予算はありません。下のフォームから登録してください。
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {extBudgetsList.map(b => (
+                    <div key={b.id} style={{ padding: '14px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '1rem', color: '#0f172a' }}>{b.name}</div>
+                        {b.description && (
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px' }}>{b.description}</div>
+                        )}
+                        <div style={{ fontSize: '0.85rem', color: '#334155', marginTop: '6px', display: 'flex', gap: '16px' }}>
+                          <span>予算枠: <strong>¥{b.totalAmount.toLocaleString()}</strong></span>
+                          <span>消化額: <strong style={{ color: '#db2777' }}>¥{b.usedAmount.toLocaleString()}</strong></span>
+                          <span>残高: <strong style={{ color: '#059669' }}>¥{b.remainingAmount.toLocaleString()}</strong></span>
+                        </div>
+                      </div>
+
+                      <button 
+                        onClick={() => handleDeleteExtBudget(b.id)}
+                        style={{ padding: '6px 12px', backgroundColor: 'white', color: '#ef4444', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                        title="削除"
+                      >
+                        削除
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 新規枠追加フォーム */}
+            <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: 'bold', color: '#334155', marginBottom: '12px' }}>
+                新しい部費外予算枠を追加
+              </h4>
+
+              <form onSubmit={handleCreateExtBudget} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>
+                    予算枠の名称 <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="例: OB・OG寄付金、特別助成金、自己負担枠"
+                    className="form-input"
+                    value={newExtBudget.name}
+                    onChange={e => setNewExtBudget({ ...newExtBudget, name: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>
+                    予算総額（円） <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input 
+                    type="number" 
+                    required 
+                    min="0"
+                    placeholder="例: 100000"
+                    className="form-input"
+                    value={newExtBudget.totalAmount}
+                    onChange={e => setNewExtBudget({ ...newExtBudget, totalAmount: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '600', color: '#334155', marginBottom: '4px' }}>
+                    使途・備考
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder="例: 外部発表支援のための特別枠"
+                    className="form-input"
+                    value={newExtBudget.description}
+                    onChange={e => setNewExtBudget({ ...newExtBudget, description: e.target.value })}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                  <button type="submit" className="primary-btn" style={{ backgroundColor: '#db2777' }}>
+                    <Plus size={18} />
+                    枠を追加する
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

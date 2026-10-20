@@ -56,7 +56,11 @@ function TopPage() {
     isPendingOver = false,
     totalBudget = 0,
     unfinalizedCount = 0, 
-    yearName = ''
+    yearName = '',
+    externalBudgetTotal = 0,
+    externalBudgetUsedTotal = 0,
+    mySpentTotal = 0,
+    myPendingTotal = 0
   } = summaryData;
 
   return (
@@ -174,11 +178,22 @@ function TopPage() {
               </span>
             </div>
 
-            {isManagerOrAdmin && (
+            {viewMode === 'me' ? (
+              <div className="widget-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/my-applications')}>
+                <h3>今年度の個人利用額</h3>
+                <p className="widget-value" style={{ color: '#2563eb' }}>¥{mySpentTotal.toLocaleString()}</p>
+                <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                  {myPendingTotal > 0 ? `申請中: ¥${myPendingTotal.toLocaleString()} | ` : ''}部費残高: ¥{effectiveBalance.toLocaleString()}
+                </span>
+              </div>
+            ) : (
               <div className="widget-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/fiscal-years')}>
-                <h3>実質予算残高</h3>
+                <h3>部費の実質残高</h3>
                 <p className={`widget-value ${isBudgetOver ? 'alert' : ''}`}>¥{effectiveBalance.toLocaleString()}</p>
-                <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>予算総額: ¥{totalBudget.toLocaleString()}</span>
+                <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                  総予算: ¥{totalBudget.toLocaleString()}
+                  {externalBudgetTotal > 0 && ` | 部費外残: ¥${(externalBudgetTotal - externalBudgetUsedTotal).toLocaleString()}`}
+                </span>
               </div>
             )}
           </div>
