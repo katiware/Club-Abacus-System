@@ -35,11 +35,6 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         var isAdmin = User.HasClaim("Permission", PermissionType.ExpenseReadAll.ToString());
 
-        if (!isAdmin)
-        {
-            viewMode = "me";
-        }
-
         var query = context.ExpenseRequests.AsQueryable();
         if (viewMode == "me")
         {
@@ -95,6 +90,10 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         decimal settledTotal = 0;
         decimal approvedTotal = 0;
         decimal pendingTotal = 0;
+        decimal mySpentTotal = 0;
+        decimal myPendingTotal = 0;
+        decimal externalBudgetTotal = 0;
+        decimal externalBudgetUsedTotal = 0;
         var categoryTotals = new Dictionary<string, decimal>();
 
         if (currentFiscalYear != null)
@@ -102,39 +101,76 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             var fyStart = currentFiscalYear.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
             var fyEnd = currentFiscalYear.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
 
-            // 当年度の全申請（管理者モードの場合は全体、自分モードの場合は自分のみ）
-            var fyRequestsQuery = context.ExpenseRequests
+            // 当年度の全申請（部全体の部費残高および部費外予算を計算するため、常に年度全体で取得）
+            var allFyRequests = await context.ExpenseRequests
                 .Include(e => e.ExpenseItems)
-                .Where(e => e.CreatedAt >= fyStart && e.CreatedAt <= fyEnd && e.Status != ExpenseStatus.Rejected);
+                .Where(e => e.CreatedAt >= fyStart && e.CreatedAt <= fyEnd && e.Status != ExpenseStatus.Rejected)
+                .ToListAsync(cancellationToken);
 
-            if (viewMode == "me" && currentUserId != Guid.Empty)
-            {
-                fyRequestsQuery = fyRequestsQuery.Where(e => e.UserId == currentUserId);
-            }
-
-            var allFyRequests = await fyRequestsQuery.ToListAsync(cancellationToken);
-
-            // 確定済み（精算完了・大学提出済）
+            // ① 部全体の確定済み部費支出（Settled / UniversitySubmitted）
+            // 実質部費負担分 = TotalAmount - ExternalBudgetAmount
             settledTotal = allFyRequests
                 .Where(e => e.Status == ExpenseStatus.Settled || e.Status == ExpenseStatus.UniversitySubmitted)
-                .Sum(e => e.TotalAmount);
+                .Sum(e => Math.Max(0, e.TotalAmount - e.ExternalBudgetAmount));
 
-            // 事前承認済み（承認済・現金渡し済・領収書確認待ち・大学提出待ち）
+            // ② 部全体の事前承認済み部費枠（承認済・現金渡し済・領収書確認待ち・大学提出待ち）
             approvedTotal = allFyRequests
                 .Where(e => e.Status == ExpenseStatus.Approved || 
                             e.Status == ExpenseStatus.Advance_MoneyHandedOver || 
                             e.Status == ExpenseStatus.WaitingConfirmation ||
                             e.Status == ExpenseStatus.WaitingUniversitySubmission)
-                .Sum(e => e.TotalAmount);
+                .Sum(e => Math.Max(0, e.TotalAmount - e.ExternalBudgetAmount));
 
-            // 承認待ち
+            // ③ 部全体の承認待ち部費枠
             pendingTotal = allFyRequests
                 .Where(e => e.Status == ExpenseStatus.PendingApproval)
-                .Sum(e => e.TotalAmount);
+                .Sum(e => Math.Max(0, e.TotalAmount - e.ExternalBudgetAmount));
 
-            // カテゴリ別集計（確定支出 ＋ 承認済み支出）
-            foreach (var req in allFyRequests.Where(e => e.Status != ExpenseStatus.Draft && e.Status != ExpenseStatus.Remanded))
+            // ④ 部費外予算の集計（一般部員には非表示・主将会計/管理者のみ）
+            if (isAdmin)
             {
+                externalBudgetTotal = await context.ExternalBudgets
+                    .Where(b => b.FiscalYearId == currentFiscalYear.Id)
+                    .SumAsync(b => b.TotalAmount, cancellationToken);
+
+                externalBudgetUsedTotal = allFyRequests
+                    .Where(e => e.Status != ExpenseStatus.Draft && e.Status != ExpenseStatus.Remanded)
+                    .Sum(e => e.ExternalBudgetAmount);
+            }
+            else
+            {
+                externalBudgetTotal = 0;
+                externalBudgetUsedTotal = 0;
+            }
+
+            // ⑤ ログインユーザー自身の個人利用実績（自分モード時に表示: 部費実質負担額ベース）
+            if (currentUserId != Guid.Empty)
+            {
+                var myRequests = allFyRequests.Where(e => e.UserId == currentUserId);
+                mySpentTotal = myRequests
+                    .Where(e => e.Status == ExpenseStatus.Settled || e.Status == ExpenseStatus.UniversitySubmitted)
+                    .Sum(e => Math.Max(0, e.TotalAmount - e.ExternalBudgetAmount));
+                myPendingTotal = myRequests
+                    .Where(e => e.Status == ExpenseStatus.PendingApproval ||
+                                e.Status == ExpenseStatus.Approved ||
+                                e.Status == ExpenseStatus.Advance_MoneyHandedOver ||
+                                e.Status == ExpenseStatus.WaitingConfirmation ||
+                                e.Status == ExpenseStatus.WaitingUniversitySubmission)
+                    .Sum(e => Math.Max(0, e.TotalAmount - e.ExternalBudgetAmount));
+            }
+
+            // カテゴリ別集計（部費実質負担額ベースで按分）
+            var categoryRequests = (viewMode == "me" && currentUserId != Guid.Empty)
+                ? allFyRequests.Where(e => e.UserId == currentUserId && e.Status != ExpenseStatus.Draft && e.Status != ExpenseStatus.Remanded)
+                : allFyRequests.Where(e => e.Status != ExpenseStatus.Draft && e.Status != ExpenseStatus.Remanded);
+
+            foreach (var req in categoryRequests)
+            {
+                var reqClubBudget = Math.Max(0, req.TotalAmount - req.ExternalBudgetAmount);
+                if (reqClubBudget == 0) continue; // 全額部費外予算の場合は部費カテゴリ集計から除外
+
+                decimal ratio = req.TotalAmount > 0 ? (decimal)reqClubBudget / req.TotalAmount : 1m;
+
                 foreach (var item in req.ExpenseItems)
                 {
                     var cat = string.IsNullOrWhiteSpace(item.Category) ? "その他" : item.Category;
@@ -142,7 +178,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
                     {
                         categoryTotals[cat] = 0;
                     }
-                    categoryTotals[cat] += (item.UnitPrice * item.Quantity);
+                    categoryTotals[cat] += Math.Round((item.UnitPrice * item.Quantity) * ratio);
                 }
             }
         }
@@ -223,6 +259,10 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             PendingTotal = pendingTotal,
             FutureRecurringTotal = futureRecurringTotal,
             TotalRequestsCount = totalRequestsCount,
+            ExternalBudgetTotal = externalBudgetTotal,
+            ExternalBudgetUsedTotal = externalBudgetUsedTotal,
+            MySpentTotal = mySpentTotal,
+            MyPendingTotal = myPendingTotal,
             CategoryTotals = categoryTotals
         });
     }
@@ -313,6 +353,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             .Include(e => e.User)
             .Include(e => e.ExpenseItems)
             .Include(e => e.ExpenseDocuments)
+            .Include(e => e.ExternalBudget)
             .FirstOrDefaultAsync(e => e.Id == id, cancellationToken);
 
         if (expenseRequest == null)
@@ -344,6 +385,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             .AsNoTracking()
             .Include(e => e.User)
             .Include(e => e.ExpenseItems)
+            .Include(e => e.ExternalBudget)
             .AsQueryable();
 
         if (fiscalYearId.HasValue)
@@ -379,6 +421,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         var query = context.ExpenseRequests
             .AsNoTracking()
             .Include(e => e.ExpenseItems)
+            .Include(e => e.ExternalBudget)
             .Where(e => e.UserId == currentUserId)
             .AsQueryable();
 
@@ -545,6 +588,10 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         expenseRequest.Type = dto.Type;
         expenseRequest.ReceiptType = dto.ReceiptType;
         expenseRequest.TotalAmount = dto.ExpenseItems.Sum(x => x.UnitPrice * x.Quantity);
+        if (expenseRequest.ExternalBudgetAmount > expenseRequest.TotalAmount)
+        {
+            expenseRequest.ExternalBudgetAmount = expenseRequest.TotalAmount;
+        }
         expenseRequest.UpdatedAt = DateTime.UtcNow;
 
         // 明細の更新（既存を全削除して新規追加するシンプルアプローチ）
@@ -650,6 +697,53 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             expenseRequest.RejectionReason = null;
             expenseRequest.ApprovedById = currentUserId;
             expenseRequest.ApprovedAt = DateTime.UtcNow;
+
+            // 部費外予算の充当処理（主将会計以上）
+            if (dto.ExternalBudgetAmount.HasValue)
+            {
+                if (dto.ExternalBudgetAmount.Value < 0 || dto.ExternalBudgetAmount.Value > expenseRequest.TotalAmount)
+                {
+                    return BadRequest("部費外充当金額は0円以上、申請総額以下である必要があります。");
+                }
+
+                if (dto.ExternalBudgetId.HasValue && dto.ExternalBudgetAmount.Value > 0)
+                {
+                    var budget = await context.ExternalBudgets.FindAsync(new object[] { dto.ExternalBudgetId.Value }, cancellationToken);
+                    if (budget == null)
+                    {
+                        return BadRequest("指定された部費外予算が存在しません。");
+                    }
+                    var assetType = dto.ExternalBudgetAssetType ?? ExternalBudgetAssetType.Cash;
+                    var otherUsed = await context.ExpenseRequests
+                        .Where(r => r.ExternalBudgetId == budget.Id && r.Id != expenseRequest.Id &&
+                                    r.Status != ExpenseStatus.Draft && r.Status != ExpenseStatus.Rejected && r.Status != ExpenseStatus.Remanded)
+                        .Where(r => (!r.ExternalBudgetAssetType.HasValue && assetType == ExternalBudgetAssetType.Cash) || r.ExternalBudgetAssetType == assetType)
+                        .SumAsync(r => r.ExternalBudgetAmount, cancellationToken);
+
+                    int maxAvailable = assetType switch
+                    {
+                        ExternalBudgetAssetType.Cash => budget.CashAmount - otherUsed,
+                        ExternalBudgetAssetType.AmazonGift => budget.AmazonGiftAmount - otherUsed,
+                        ExternalBudgetAssetType.Other => budget.OtherAmount - otherUsed,
+                        _ => 0
+                    };
+
+                    if (dto.ExternalBudgetAmount.Value > maxAvailable)
+                    {
+                        var typeName = assetType switch { ExternalBudgetAssetType.Cash => "現金", ExternalBudgetAssetType.AmazonGift => "Amazonギフトカード", _ => "その他" };
+                        return BadRequest($"部費外予算「{budget.Name}」の{typeName}残高（¥{Math.Max(0, maxAvailable):N0}）を超過しています。");
+                    }
+
+                    expenseRequest.ExternalBudgetAssetType = assetType;
+                }
+                else
+                {
+                    expenseRequest.ExternalBudgetAssetType = null;
+                }
+
+                expenseRequest.ExternalBudgetAmount = dto.ExternalBudgetAmount.Value;
+                expenseRequest.ExternalBudgetId = dto.ExternalBudgetId;
+            }
         }
 
         context.AuditLogs.Add(new AuditLog
@@ -657,7 +751,8 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             TargetType = "ExpenseRequests",
             TargetId = expenseRequest.Id,
             UserId = currentUserId,
-            Action = $"STATUS_CHANGE_{dto.Status.ToString().ToUpper()}"
+            Action = $"STATUS_CHANGE_{dto.Status.ToString().ToUpper()}",
+            NewValue = $"Status={dto.Status}, ExternalBudgetAmount={expenseRequest.ExternalBudgetAmount}, AssetType={expenseRequest.ExternalBudgetAssetType}"
         });
 
         await context.SaveChangesAsync(cancellationToken);
@@ -665,7 +760,7 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     }
 
     /// <summary>
-    /// 提出された領収書の確認・精算など、事後処理のステータスを変更します。
+    /// 提出された領収書の確認・大学申請・精算、または大学不認可による却下・差し戻しなど、事後処理のステータスを変更します。
     /// </summary>
     [HttpPut("{id}/confirm")]
     [Authorize]
@@ -686,24 +781,26 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             return StatusCode(StatusCodes.Status403Forbidden, "自分の申請に対する事後処理（確認・精算等）を自分で行うことはできません。");
         }
 
-        // 必要な権限のチェック
+        // 必要な権限のチェック（確認・精算・大学提出権限）
         if (!User.HasClaim("Permission", PermissionType.ExpenseConfirmReceipt.ToString()) &&
-            !User.HasClaim("Permission", PermissionType.ExpenseSettle.ToString()))
+            !User.HasClaim("Permission", PermissionType.ExpenseSettle.ToString()) &&
+            !User.HasClaim("Permission", PermissionType.ExpenseSubmitToUniversity.ToString()) &&
+            !User.HasClaim("Permission", PermissionType.ExpenseApprove.ToString()))
         {
-            return StatusCode(StatusCodes.Status403Forbidden, "領収書の確認・精算などの操作を行う権限がありません。");
+            return StatusCode(StatusCodes.Status403Forbidden, "領収書の確認・精算・却下などの操作を行う権限がありません。");
         }
 
-        // 承認前・却下済みの場合は操作不可
+        // 承認前・下書きの場合は操作不可
         if (expenseRequest.Status == ExpenseStatus.Draft ||
-            expenseRequest.Status == ExpenseStatus.PendingApproval ||
-            expenseRequest.Status == ExpenseStatus.Rejected)
+            expenseRequest.Status == ExpenseStatus.PendingApproval)
         {
             return BadRequest("事前承認が完了していないため、このステータスへは進めません。");
         }
 
-        // 事前出金または金額変動がある場合、まだユーザーが実費確定していない場合は進めない
+        // 事前出金または金額変動がある場合、まだユーザーが実費確定していない場合は進めない（却下・差し戻し時を除く）
         bool requiresAmountFinalization = expenseRequest.IsAmountVariable || expenseRequest.Type == ExpenseType.Advance;
         if (requiresAmountFinalization && !expenseRequest.IsAmountFinalized && 
+            dto.Status != ExpenseStatus.Rejected && dto.Status != ExpenseStatus.Remanded &&
             (dto.Status == ExpenseStatus.WaitingConfirmation || 
              dto.Status == ExpenseStatus.WaitingUniversitySubmission || 
              dto.Status == ExpenseStatus.Settled || 
@@ -720,7 +817,6 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             {
                 return BadRequest("このステータス（事前出金渡し済）は、事前出金の申請に対してのみ使用できます。");
             }
-            // ※現金手渡し時点では買い物が終わっていないため、領収書画像の必須チェックは行わない
         }
         else if (dto.Status == ExpenseStatus.WaitingConfirmation ||
                  dto.Status == ExpenseStatus.WaitingUniversitySubmission ||
@@ -733,10 +829,68 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
             {
                 return BadRequest("証憑（領収書等）がアップロードされていないため、このステータスへは進めません。");
             }
+
+            // 部費外予算の振替・調整（大学不認可による部費外救済や金額確定時の再割当）
+            if (dto.ExternalBudgetAmount.HasValue)
+            {
+                if (dto.ExternalBudgetAmount.Value < 0 || dto.ExternalBudgetAmount.Value > expenseRequest.TotalAmount)
+                {
+                    return BadRequest("部費外充当金額は0円以上、申請総額以下である必要があります。");
+                }
+
+                if (dto.ExternalBudgetId.HasValue && dto.ExternalBudgetAmount.Value > 0)
+                {
+                    var budget = await context.ExternalBudgets.FindAsync(new object[] { dto.ExternalBudgetId.Value }, cancellationToken);
+                    if (budget == null)
+                    {
+                        return BadRequest("指定された部費外予算が存在しません。");
+                    }
+                    var assetType = dto.ExternalBudgetAssetType ?? ExternalBudgetAssetType.Cash;
+                    var otherUsed = await context.ExpenseRequests
+                        .Where(r => r.ExternalBudgetId == budget.Id && r.Id != expenseRequest.Id &&
+                                    r.Status != ExpenseStatus.Draft && r.Status != ExpenseStatus.Rejected && r.Status != ExpenseStatus.Remanded)
+                        .Where(r => (!r.ExternalBudgetAssetType.HasValue && assetType == ExternalBudgetAssetType.Cash) || r.ExternalBudgetAssetType == assetType)
+                        .SumAsync(r => r.ExternalBudgetAmount, cancellationToken);
+
+                    int maxAvailable = assetType switch
+                    {
+                        ExternalBudgetAssetType.Cash => budget.CashAmount - otherUsed,
+                        ExternalBudgetAssetType.AmazonGift => budget.AmazonGiftAmount - otherUsed,
+                        ExternalBudgetAssetType.Other => budget.OtherAmount - otherUsed,
+                        _ => 0
+                    };
+
+                    if (dto.ExternalBudgetAmount.Value > maxAvailable)
+                    {
+                        var typeName = assetType switch { ExternalBudgetAssetType.Cash => "現金", ExternalBudgetAssetType.AmazonGift => "Amazonギフトカード", _ => "その他" };
+                        return BadRequest($"部費外予算「{budget.Name}」の{typeName}残高（¥{Math.Max(0, maxAvailable):N0}）を超過しています。");
+                    }
+
+                    expenseRequest.ExternalBudgetAssetType = assetType;
+                }
+                else
+                {
+                    expenseRequest.ExternalBudgetAssetType = null;
+                }
+
+                expenseRequest.ExternalBudgetAmount = dto.ExternalBudgetAmount.Value;
+                expenseRequest.ExternalBudgetId = dto.ExternalBudgetId;
+            }
+        }
+        else if (dto.Status == ExpenseStatus.Rejected)
+        {
+            // ③ 大学等による却下（申請不承認）
+            expenseRequest.RejectionReason = dto.RejectionReason ?? "大学の確認・申請において却下されました。";
+        }
+        else if (dto.Status == ExpenseStatus.Remanded)
+        {
+            // ④ 大学等による書類不備の差し戻し
+            expenseRequest.RejectionReason = dto.RejectionReason ?? "大学提出時の書類不備等により差し戻されました。内容を修正して再提出してください。";
+            expenseRequest.IsEditedAfterApproval = false;
         }
         else
         {
-            return BadRequest("このAPIでは事後処理関連のステータスのみ指定可能です。");
+            return BadRequest("このAPIでは指定できないステータスです。");
         }
 
         expenseRequest.Status = dto.Status;
@@ -748,7 +902,8 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
                 TargetType = "ExpenseRequests",
                 TargetId = expenseRequest.Id,
                 UserId = currentUserId,
-                Action = $"STATUS_CHANGE_{dto.Status.ToString().ToUpper()}"
+                Action = $"STATUS_CHANGE_{dto.Status.ToString().ToUpper()}",
+                NewValue = $"Status={dto.Status}, Reason={expenseRequest.RejectionReason}, ExternalBudgetAmount={expenseRequest.ExternalBudgetAmount}"
             });
         }
 
@@ -802,6 +957,10 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
         }
 
         expenseRequest.TotalAmount = actualAmount;
+        if (expenseRequest.ExternalBudgetAmount > expenseRequest.TotalAmount)
+        {
+            expenseRequest.ExternalBudgetAmount = expenseRequest.TotalAmount;
+        }
         expenseRequest.IsAmountFinalized = true;
         
         // 明細が1件だけの場合は、その明細の金額も合わせる
@@ -829,12 +988,27 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     }
 
     /// <summary>
+    /// 申請の現金手渡し必要額を算出します。非現金（Amazonギフト等）で充当された部費外予算がある場合はその分を除きます。
+    /// </summary>
+    private static int GetCashPayoutAmount(ExpenseRequest expense)
+    {
+        if (expense.ExternalBudgetAmount > 0 && expense.ExternalBudgetAssetType.HasValue && expense.ExternalBudgetAssetType.Value != ExternalBudgetAssetType.Cash)
+        {
+            return Math.Max(0, expense.TotalAmount - expense.ExternalBudgetAmount);
+        }
+        return expense.TotalAmount;
+    }
+
+    /// <summary>
     /// 複数の経費申請の金種計算を行います。
-    /// （個別の申請ごとに必要な金種を計算し、その結果を合算します）
+    /// （groupByPerson=true の場合は同一人物の申請を合算してから金種を計算します）
     /// </summary>
     [HttpPost("calculate-denominations")]
     [RequirePermission(PermissionType.ExpenseSettle)]
-    public async Task<ActionResult<DenominationResultDto>> CalculateDenominations([FromBody] List<Guid> expenseIds, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<DenominationResultDto>> CalculateDenominations(
+        [FromBody] List<Guid> expenseIds, 
+        [FromQuery] bool groupByPerson = false, 
+        CancellationToken cancellationToken = default)
     {
         var expenses = await context.ExpenseRequests
             .Where(e => expenseIds.Contains(e.Id))
@@ -844,10 +1018,30 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         var totalResult = new DenominationResultDto();
 
-        foreach (var expense in expenses)
+        if (groupByPerson)
         {
-            var result = CalculateDenominationForAmount(expense.TotalAmount);
-            totalResult.Add(result);
+            var grouped = expenses.GroupBy(e => e.UserId);
+            foreach (var g in grouped)
+            {
+                var personTotal = g.Sum(GetCashPayoutAmount);
+                if (personTotal > 0)
+                {
+                    var result = CalculateDenominationForAmount(personTotal);
+                    totalResult.Add(result);
+                }
+            }
+        }
+        else
+        {
+            foreach (var expense in expenses)
+            {
+                var cashAmount = GetCashPayoutAmount(expense);
+                if (cashAmount > 0)
+                {
+                    var result = CalculateDenominationForAmount(cashAmount);
+                    totalResult.Add(result);
+                }
+            }
         }
 
         return Ok(totalResult);
@@ -855,20 +1049,21 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
     /// <summary>
     /// 特定の月（1ヶ月分）の経費申請すべてを対象に金種計算をまとめて行います。
+    /// （groupByPerson=true の場合は同一人物の申請を合算してから金種を計算します）
     /// </summary>
     [HttpGet("denominations/monthly")]
     [RequirePermission(PermissionType.ExpenseSettle)]
-    public async Task<ActionResult<DenominationResultDto>> GetMonthlyDenominations(int year, int month, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<DenominationResultDto>> GetMonthlyDenominations(
+        int year, 
+        int month, 
+        [FromQuery] bool groupByPerson = false, 
+        CancellationToken cancellationToken = default)
     {
         // 指定された年月の月初と翌月初を取得
         var startDate = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
         var endDate = startDate.AddMonths(1);
 
         // 指定月に作成された申請のうち、有効なもの（下書き・却下以外）を取得します。
-        // ※ 運用ロジック:
-        // 「事前出金 (Advance)」は「承認済 (Approved)」が手渡し待ち
-        // 「立替 (Reimbursement)」は「大学へ申請完了 (UniversitySubmitted)」の後に精算するルールと仮定します。
-        // さらに、Createdではなくステータス更新日(UpdatedAt)で期間を絞り込みます。
         var expenses = await context.ExpenseRequests
             .Where(e => e.UpdatedAt >= startDate && e.UpdatedAt < endDate)
             .Where(e => (e.Type == ExpenseType.Advance && e.Status == ExpenseStatus.Approved) ||
@@ -877,10 +1072,30 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         var totalResult = new DenominationResultDto();
 
-        foreach (var expense in expenses)
+        if (groupByPerson)
         {
-            var result = CalculateDenominationForAmount(expense.TotalAmount);
-            totalResult.Add(result);
+            var grouped = expenses.GroupBy(e => e.UserId);
+            foreach (var g in grouped)
+            {
+                var personTotal = g.Sum(GetCashPayoutAmount);
+                if (personTotal > 0)
+                {
+                    var result = CalculateDenominationForAmount(personTotal);
+                    totalResult.Add(result);
+                }
+            }
+        }
+        else
+        {
+            foreach (var expense in expenses)
+            {
+                var cashAmount = GetCashPayoutAmount(expense);
+                if (cashAmount > 0)
+                {
+                    var result = CalculateDenominationForAmount(cashAmount);
+                    totalResult.Add(result);
+                }
+            }
         }
 
         return Ok(totalResult);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Plus, Settings, Calculator, FileText, AlertTriangle, Users, BookOpen, Clock, User, Shield } from 'lucide-react';
+import { LogOut, Plus, Settings, Calculator, FileText, AlertTriangle, Users, BookOpen, Clock, User, Shield, ArrowRight, TrendingUp, Info, Wallet } from 'lucide-react';
 import api from '../services/api';
 import './TopPage.css';
 
@@ -16,6 +16,7 @@ function TopPage() {
 
   const isManagerOrAdmin = userRole === 'ADMIN' || userRole === 'MANAGER';
   const [viewMode, setViewMode] = useState(isManagerOrAdmin ? 'all' : 'me');
+  const [activeFiscalYearId, setActiveFiscalYearId] = useState(null);
   const [summaryData, setSummaryData] = useState({
     pendingCount: 0,
     waitingConfirmationCount: 0,
@@ -30,6 +31,19 @@ function TopPage() {
     unfinalizedCount: 0,
     yearName: ''
   });
+
+  useEffect(() => {
+    const fetchActiveFy = async () => {
+      try {
+        const res = await api.get('/FiscalYear');
+        const active = res.data.find(f => f.isActive);
+        if (active) setActiveFiscalYearId(active.id);
+      } catch (err) {
+        console.error('Failed to fetch fiscal years', err);
+      }
+    };
+    fetchActiveFy();
+  }, []);
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -48,16 +62,25 @@ function TopPage() {
     pendingCount = 0, 
     waitingConfirmationCount = 0, 
     settledCount = 0, 
-    draftCount = 0,
+    draftCount = 0, 
     overdueCount = 0, 
     budgetBalance = 0, 
     effectiveBalance = 0, 
-    isBudgetOver = false,
-    isPendingOver = false,
-    totalBudget = 0,
+    isBudgetOver = false, 
+    isPendingOver = false, 
+    totalBudget = 0, 
+    settledTotal = 0,
+    approvedTotal = 0,
     unfinalizedCount = 0, 
-    yearName = ''
+    yearName = '', 
+    externalBudgetTotal = 0, 
+    externalBudgetUsedTotal = 0, 
+    mySpentTotal = 0, 
+    myPendingTotal = 0 
   } = summaryData;
+
+  const totalUsedBudget = (settledTotal || 0) + (approvedTotal || 0);
+  const budgetUsagePercent = totalBudget > 0 ? Math.min(Math.round((totalUsedBudget / totalBudget) * 100), 100) : 0;
 
   return (
     <div className="top-page-container">
@@ -90,23 +113,139 @@ function TopPage() {
                 </span>
               )}
             </div>
-            {isManagerOrAdmin && (
-              <div className="view-mode-toggle" style={{ display: 'flex', gap: '5px', backgroundColor: '#f1f3f5', padding: '4px', borderRadius: '8px' }}>
-                <button 
-                  style={{ padding: '6px 14px', border: 'none', borderRadius: '6px', cursor: 'pointer', backgroundColor: viewMode === 'all' ? '#fff' : 'transparent', boxShadow: viewMode === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontWeight: viewMode === 'all' ? '600' : 'normal', color: viewMode === 'all' ? '#111827' : '#6b7280' }}
-                  onClick={() => setViewMode('all')}
-                >
-                  全体（部活）
-                </button>
-                <button 
-                  style={{ padding: '6px 14px', border: 'none', borderRadius: '6px', cursor: 'pointer', backgroundColor: viewMode === 'me' ? '#fff' : 'transparent', boxShadow: viewMode === 'me' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontWeight: viewMode === 'me' ? '600' : 'normal', color: viewMode === 'me' ? '#111827' : '#6b7280' }}
-                  onClick={() => setViewMode('me')}
-                >
-                  自分のみ
-                </button>
-              </div>
-            )}
+
+            {/* 表示モード切り替え（部員も部全体の状況と自分の実績を自由に切り替え可能） */}
+            <div className="view-mode-toggle" style={{ display: 'flex', gap: '5px', backgroundColor: '#f1f3f5', padding: '4px', borderRadius: '8px' }}>
+              <button 
+                style={{ padding: '6px 14px', border: 'none', borderRadius: '6px', cursor: 'pointer', backgroundColor: viewMode === 'all' ? '#fff' : 'transparent', boxShadow: viewMode === 'all' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontWeight: viewMode === 'all' ? '600' : 'normal', color: viewMode === 'all' ? '#111827' : '#6b7280' }}
+                onClick={() => setViewMode('all')}
+                title="部活動全体の申請状況・予算サマリーを表示します"
+              >
+                全体（部活）
+              </button>
+              <button 
+                style={{ padding: '6px 14px', border: 'none', borderRadius: '6px', cursor: 'pointer', backgroundColor: viewMode === 'me' ? '#fff' : 'transparent', boxShadow: viewMode === 'me' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', fontWeight: viewMode === 'me' ? '600' : 'normal', color: viewMode === 'me' ? '#111827' : '#6b7280' }}
+                onClick={() => setViewMode('me')}
+                title="自分自身の申請状況・利用実績を表示します"
+              >
+                自分のみ
+              </button>
+            </div>
           </div>
+
+          {/* 部費の総額と使用額 サマリーカード（部員も常時確認可能） */}
+          {totalBudget > 0 && (
+            <div style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              padding: '20px 24px',
+              marginBottom: '20px',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <TrendingUp size={18} className="text-blue-600" />
+                  <span style={{ fontWeight: '700', fontSize: '15px', color: '#1e293b' }}>
+                    {yearName || '今年度'} 部費予算・使用状況
+                  </span>
+                </div>
+                {activeFiscalYearId && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/fiscal-year-dashboard/${activeFiscalYearId}`)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontSize: '12px',
+                      fontWeight: '600',
+                      color: '#2563eb',
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      padding: '5px 12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title="年度予算ダッシュボードで詳細な内訳を確認します"
+                  >
+                    詳細ダッシュボード <ArrowRight size={13} />
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '16px', marginBottom: '14px' }}>
+                <div>
+                  <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '2px' }}>部費 総予算</span>
+                  <span style={{ fontSize: '20px', fontWeight: '700', color: '#1e293b', fontFamily: 'monospace' }}>
+                    ¥{totalBudget.toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '2px' }}>部費 使用額（確定＋承認済枠）</span>
+                  <span style={{ fontSize: '20px', fontWeight: '700', color: '#2563eb', fontFamily: 'monospace' }}>
+                    ¥{totalUsedBudget.toLocaleString()}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>
+                    確定支出: ¥{(settledTotal || 0).toLocaleString()} / 承認済枠: ¥{(approvedTotal || 0).toLocaleString()}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '2px' }}>部費 実質残高</span>
+                  <span style={{ fontSize: '20px', fontWeight: '700', color: effectiveBalance < 0 ? '#dc2626' : '#15803d', fontFamily: 'monospace' }}>
+                    ¥{effectiveBalance.toLocaleString()}
+                  </span>
+                  <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>
+                    {isBudgetOver ? '⚠️ 予算超過しています' : '残予算は十分にあります'}
+                  </span>
+                </div>
+                {isManagerOrAdmin && externalBudgetTotal > 0 && (
+                  <div 
+                    onClick={() => navigate('/external-budgets')}
+                    style={{ cursor: 'pointer', padding: '6px 8px', borderRadius: '8px', transition: 'background-color 0.15s ease' }}
+                    className="hover-card-bg"
+                    title="部費外予算の専用管理画面を開きます"
+                  >
+                    <span style={{ fontSize: '12px', color: '#db2777', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                      💰 部費外予算 残高 <ArrowRight size={11} />
+                    </span>
+                    <span style={{ fontSize: '20px', fontWeight: '700', color: '#db2777', fontFamily: 'monospace' }}>
+                      ¥{(externalBudgetTotal - externalBudgetUsedTotal).toLocaleString()}
+                    </span>
+                    <span style={{ fontSize: '11px', color: '#94a3b8', display: 'block' }}>
+                      総枠: ¥{externalBudgetTotal.toLocaleString()}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* 予算消化率プログレスバー */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>
+                  <span>予算消化率: <strong>{totalBudget > 0 ? Math.round((totalUsedBudget / totalBudget) * 100) : 0}%</strong></span>
+                  <span>残高: ¥{effectiveBalance.toLocaleString()}</span>
+                </div>
+                <div style={{ width: '100%', height: '8px', backgroundColor: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${budgetUsagePercent}%`,
+                    height: '100%',
+                    backgroundColor: effectiveBalance < 0 ? '#dc2626' : (budgetUsagePercent > 85 ? '#eab308' : '#2563eb'),
+                    borderRadius: '4px',
+                    transition: 'width 0.3s ease'
+                  }} />
+                </div>
+              </div>
+
+              {/* 補足説明ヘルプテキスト */}
+              <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #e2e8f0', fontSize: '0.78rem', color: '#64748b', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                <Info size={14} className="flex-shrink-0 text-blue-500" style={{ marginTop: '2px' }} />
+                <span>
+                  <strong>実質残高とは:</strong> 総予算から「確定支出」「承認済みの使用枠」「定期払いの発生見込」を差し引いた、現時点で安全に使える残予算です。{isManagerOrAdmin && '部費外予算（寄付金や助成金等）は部費を消費せず充当できます。'}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* 予算超過アラートバナー */}
           {isManagerOrAdmin && isBudgetOver && (
@@ -174,11 +313,26 @@ function TopPage() {
               </span>
             </div>
 
-            {isManagerOrAdmin && (
-              <div className="widget-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/fiscal-years')}>
-                <h3>実質予算残高</h3>
+            {viewMode === 'me' ? (
+              <div className="widget-card" style={{ cursor: 'pointer' }} onClick={() => navigate('/my-applications')}>
+                <h3>今年度の個人利用額</h3>
+                <p className="widget-value" style={{ color: '#2563eb' }}>¥{mySpentTotal.toLocaleString()}</p>
+                <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                  {myPendingTotal > 0 ? `申請中: ¥${myPendingTotal.toLocaleString()} | ` : ''}部費残高: ¥{effectiveBalance.toLocaleString()}
+                </span>
+              </div>
+            ) : (
+              <div 
+                className="widget-card" 
+                style={{ cursor: 'pointer' }} 
+                onClick={() => navigate(activeFiscalYearId ? `/fiscal-year-dashboard/${activeFiscalYearId}` : (isManagerOrAdmin ? '/fiscal-years' : '/top'))}
+              >
+                <h3>部費の実質残高</h3>
                 <p className={`widget-value ${isBudgetOver ? 'alert' : ''}`}>¥{effectiveBalance.toLocaleString()}</p>
-                <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>予算総額: ¥{totalBudget.toLocaleString()}</span>
+                <span style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                  総予算: ¥{totalBudget.toLocaleString()}
+                  {isManagerOrAdmin && externalBudgetTotal > 0 && ` | 部費外残: ¥${(externalBudgetTotal - externalBudgetUsedTotal).toLocaleString()}`}
+                </span>
               </div>
             )}
           </div>
@@ -198,6 +352,14 @@ function TopPage() {
               <button onClick={() => navigate('/my-applications')} className="menu-btn">
                 <FileText size={24} />
                 <span>自分の申請履歴</span>
+              </button>
+              <button 
+                onClick={() => navigate(activeFiscalYearId ? `/fiscal-year-dashboard/${activeFiscalYearId}` : '/top')} 
+                className="menu-btn"
+                title="今年度の部費総額・使用額・残高・内訳ダッシュボードを確認します"
+              >
+                <TrendingUp size={24} />
+                <span>部費・予算状況</span>
               </button>
               <button onClick={() => navigate('/recurring-payments')} className="menu-btn">
                 <Clock size={24} />
@@ -227,6 +389,10 @@ function TopPage() {
                 <button onClick={() => navigate('/fiscal-years')} className="menu-btn admin-btn">
                   <Calculator size={24} />
                   <span>年度・予算管理</span>
+                </button>
+                <button onClick={() => navigate('/external-budgets')} className="menu-btn admin-btn" style={{ borderLeft: '3px solid #db2777' }}>
+                  <Wallet size={24} style={{ color: '#db2777' }} />
+                  <span>部費外予算の管理</span>
                 </button>
                 <button onClick={() => navigate('/calculator')} className="menu-btn admin-btn">
                   <Calculator size={24} />

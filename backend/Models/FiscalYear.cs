@@ -30,4 +30,6 @@ public class FiscalYear
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<ExternalBudget> ExternalBudgets { get; set; } = new List<ExternalBudget>();
 }

@@ -366,6 +366,17 @@ function FiscalYearSettings() {
                         >
                           📊 ダッシュボード
                         </button>
+                        <button 
+                          className="secondary-btn" 
+                          style={{ color: '#db2777', borderColor: '#f472b6' }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/external-budgets/${fy.id}`);
+                          }}
+                          title="この年度の部費外予算（OB寄付金、アマギフ等）の専用管理ページを開きます"
+                        >
+                          💰 部費外予算の管理
+                        </button>
 
                         {/* 開始前年度 */}
                         {!fy.isClosed && !fy.isActive && (
@@ -576,6 +587,7 @@ function FiscalYearSettings() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
