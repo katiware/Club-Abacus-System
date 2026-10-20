@@ -32,6 +32,9 @@ public class AppDbContext(
     public DbSet<UniversitySubmissionBatch> UniversitySubmissionBatches =>
         Set<UniversitySubmissionBatch>();
 
+    public DbSet<ExternalBudget> ExternalBudgets =>
+        Set<ExternalBudget>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
@@ -71,6 +74,20 @@ public class AppDbContext(
             .WithMany()
             .HasForeignKey(b => b.FiscalYearId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // 部費外予算と申請のリレーション
+        modelBuilder.Entity<ExpenseRequest>()
+            .HasOne(r => r.ExternalBudget)
+            .WithMany(b => b.ExpenseRequests)
+            .HasForeignKey(r => r.ExternalBudgetId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // 年度と部費外予算のリレーション
+        modelBuilder.Entity<ExternalBudget>()
+            .HasOne(b => b.FiscalYear)
+            .WithMany(f => f.ExternalBudgets)
+            .HasForeignKey(b => b.FiscalYearId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 
     public override int SaveChanges()

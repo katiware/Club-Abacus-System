@@ -28,6 +28,15 @@ public class ExpenseRequest
 
     public int TotalAmount { get; set; } // 申請の合計金額（明細の合計キャッシュ）
 
+    public int ExternalBudgetAmount { get; set; } = 0; // うち部費外予算充当額（デフォルト0）
+
+    public Guid? ExternalBudgetId { get; set; } // 充当先の部費外予算ID
+
+    public ExternalBudgetAssetType? ExternalBudgetAssetType { get; set; } // 充当形態（現金・アマギフ・その他）
+
+    [NotMapped]
+    public int ClubBudgetAmount => Math.Max(0, TotalAmount - ExternalBudgetAmount); // 部費実質負担額
+
     public bool IsAmountVariable { get; set; } = false; // 為替などによる金額変動の有無（定期払いから引き継ぐ）
 
     public bool IsAmountFinalized { get; set; } = false; // 金額変動がある場合、ユーザーが実費を確定させたかどうかのフラグ
@@ -70,6 +79,9 @@ public class ExpenseRequest
 
     [ForeignKey(nameof(RecurringTemplateId))]
     public RecurringExpenseTemplate? RecurringTemplate { get; set; } // 親テンプレートへの参照
+
+    [ForeignKey(nameof(ExternalBudgetId))]
+    public ExternalBudget? ExternalBudget { get; set; } // 充当先の部費外予算への参照
 
     public ICollection<ExpenseItem> ExpenseItems { get; set; } = new List<ExpenseItem>();//明細
     public ICollection<ExpenseDocument> ExpenseDocuments { get; set; } = new List<ExpenseDocument>();//証憑

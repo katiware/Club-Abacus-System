@@ -23,6 +23,15 @@ public class ExpenseSummaryDto
     public int DraftCount { get; set; }
     public int TotalRequestsCount { get; set; }
     
+    // 部費外予算の集計
+    public decimal ExternalBudgetTotal { get; set; }
+    public decimal ExternalBudgetUsedTotal { get; set; }
+    public decimal ExternalBudgetBalance => Math.Max(0, ExternalBudgetTotal - ExternalBudgetUsedTotal);
+
+    // 個人向け利用実績（viewMode="me" 時に特に有用）
+    public decimal MySpentTotal { get; set; }
+    public decimal MyPendingTotal { get; set; }
+
     public Dictionary<string, decimal> CategoryTotals { get; set; } = new();
 }
 

@@ -232,6 +232,14 @@ function ExpenseSettleVerification() {
                   ¥{app.totalAmount?.toLocaleString()}
                 </div>
               )}
+              {app.externalBudgetAmount > 0 && (
+                <div style={{ marginTop: '6px', fontSize: '0.85rem', color: '#6b7280' }}>
+                  部費負担: <strong>¥{(app.totalAmount - app.externalBudgetAmount).toLocaleString()}</strong> / 部費外充当: <strong style={{ color: '#db2777' }}>¥{app.externalBudgetAmount.toLocaleString()}</strong>
+                  <span style={{ marginLeft: '4px', backgroundColor: '#fdf2f8', padding: '1px 6px', borderRadius: '4px', border: '1px solid #fbcfe8', fontSize: '0.8rem', color: '#9d174d' }}>
+                    {app.externalBudgetAssetType === 'Cash' ? '💵 現金' : app.externalBudgetAssetType === 'AmazonGift' ? '🎁 Amazonギフト' : '🏷️ その他'}
+                  </span>
+                </div>
+              )}
             </div>
 
             <h3 style={{ fontSize: '1rem', marginTop: '24px', marginBottom: '12px' }}>明細</h3>
@@ -247,7 +255,7 @@ function ExpenseSettleVerification() {
 
           <div style={{ padding: '24px', borderTop: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
             <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '16px', textAlign: 'center' }}>
-              証憑の金額と上記の金額が一致していることを確認し、ステータスを進めてください。
+              証憑の金額と上記の金額が一致していることを確認し、大学提出待ちへ進めてください。
             </p>
 
             <button 
@@ -255,13 +263,6 @@ function ExpenseSettleVerification() {
               style={{ width: '100%', padding: '14px', backgroundColor: '#2563eb', color: 'white', border: 'none', borderRadius: '8px', fontSize: '1.05rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginBottom: '10px' }}
             >
               <CheckCircle size={20} /> 証憑・金額OK！大学へ提出待ちにする
-            </button>
-
-            <button 
-              onClick={() => handleAction('Settled')}
-              style={{ width: '100%', padding: '12px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '8px', fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', marginBottom: '10px' }}
-            >
-              <CheckCircle size={18} /> 精算を直接完了にする (部内完結・帳簿済)
             </button>
 
             <button 

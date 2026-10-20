@@ -1,0 +1,802 @@
+.ext-management-container {
+  min-height: 100vh;
+  background-color: var(--background-color, #f8fafc);
+  display: flex;
+  flex-direction: column;
+}
+
+.ext-management-content {
+  flex: 1;
+  max-width: 1300px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 1.5rem 2rem 3rem 2rem;
+  box-sizing: border-box;
+}
+
+/* 上部コントロールバー */
+.ext-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.ext-year-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: white;
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.year-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.year-select {
+  border: none;
+  background: transparent;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  outline: none;
+  cursor: pointer;
+}
+
+.ext-info-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #64748b;
+  background-color: #f1f5f9;
+  padding: 8px 14px;
+  border-radius: 8px;
+}
+
+/* 全体統計サマリーダッシュボード */
+.ext-summary-dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.ext-summary-card {
+  background: white;
+  padding: 18px 20px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ext-summary-card.total {
+  border-left: 4px solid #6366f1;
+}
+
+.ext-summary-card.used {
+  border-left: 4px solid #ec4899;
+}
+
+.ext-summary-card.remaining {
+  border-left: 4px solid #10b981;
+}
+
+.ext-summary-card.assets {
+  border-left: 4px solid #f59e0b;
+}
+
+.card-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.card-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #0f172a;
+  font-family: monospace;
+}
+
+.card-value.text-emerald {
+  color: #059669;
+}
+
+.card-sub {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.assets-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.asset-tag {
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.asset-tag.cash {
+  background-color: #eff6ff;
+  color: #1e40af;
+}
+
+.asset-tag.amazon {
+  background-color: #fff7ed;
+  color: #c2410c;
+}
+
+.asset-tag.other {
+  background-color: #f5f3ff;
+  color: #6d28d9;
+}
+
+/* メイン2カラムレイアウト */
+.ext-main-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+@media (max-width: 1024px) {
+  .ext-main-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 左カラム */
+.ext-list-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.column-header h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reload-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #475569;
+  background: white;
+  border: 1px solid #cbd5e1;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.reload-btn:hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.ext-loading-box,
+.ext-empty-box {
+  background: white;
+  padding: 3rem 2rem;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+  text-align: center;
+  color: #64748b;
+}
+
+.ext-empty-box p {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 6px 0;
+}
+
+.ext-empty-box span {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+/* 登録済み予算枠カード */
+.ext-budgets-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ext-budget-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  border-top: 4px solid #db2777;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: box-shadow 0.15s ease;
+}
+
+.ext-budget-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.budget-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.budget-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 4px 0 0 0;
+}
+
+.usage-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #be185d;
+  background-color: #fdf2f8;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid #fbcfe8;
+  white-space: nowrap;
+}
+
+/* サマリーストリップ */
+.budget-summary-strip {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background-color: #f8fafc;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+}
+
+.strip-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.strip-label {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.strip-val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e293b;
+  font-family: monospace;
+}
+
+.strip-val.text-pink {
+  color: #db2777;
+}
+
+.strip-val.text-emerald {
+  color: #059669;
+}
+
+/* プログレスバー */
+.progress-track {
+  width: 100%;
+  height: 8px;
+  background-color: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ec4899, #db2777);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+/* 形態別残高グリッド */
+.asset-types-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .asset-types-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.asset-box {
+  padding: 10px 12px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.asset-box.cash {
+  background-color: #eff6ff;
+  border: 1px solid #bfdbfe;
+}
+
+.asset-box.amazon {
+  background-color: #fff7ed;
+  border: 1px solid #fed7aa;
+}
+
+.asset-box.other {
+  background-color: #f5f3ff;
+  border: 1px solid #ddd6fe;
+}
+
+.asset-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.asset-box.cash .asset-header { color: #1e40af; }
+.asset-box.amazon .asset-header { color: #c2410c; }
+.asset-box.other .asset-header { color: #6d28d9; }
+
+.asset-rem {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: monospace;
+}
+
+.asset-box.cash .asset-rem { color: #1e3a8a; }
+.asset-box.amazon .asset-rem { color: #7c2d12; }
+.asset-box.other .asset-rem { color: #4c1d95; }
+
+.asset-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* アクションボタンバー */
+.card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed #e2e8f0;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-btn.edit {
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.action-btn.edit:hover {
+  background-color: #dbeafe;
+}
+
+.action-btn.convert {
+  background-color: #fdf2f8;
+  color: #db2777;
+  border: 1px solid #fbcfe8;
+}
+
+.action-btn.convert:hover {
+  background-color: #fce7f3;
+}
+
+.action-btn.delete {
+  background-color: white;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  margin-left: auto;
+}
+
+.action-btn.delete:hover {
+  background-color: #fef2f2;
+}
+
+/* 右カラム：新規作成フォーム */
+.ext-form-column {
+  position: sticky;
+  top: 20px;
+}
+
+.sticky-form-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.form-card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-card-sub {
+  font-size: 0.82rem;
+  color: #64748b;
+  margin: 0 0 16px 0;
+}
+
+.create-budget-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.req {
+  color: #ef4444;
+}
+
+.form-input {
+  padding: 9px 12px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.95rem;
+  color: #1e293b;
+  background-color: white;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.form-input:focus {
+  border-color: #db2777;
+  box-shadow: 0 0 0 3px rgba(219, 39, 119, 0.1);
+}
+
+.form-asset-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.asset-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.asset-input-row span {
+  font-size: 0.82rem;
+  font-weight: 700;
+  min-width: 110px;
+}
+
+.asset-input-row.cash { background-color: #eff6ff; span { color: #1e40af; } }
+.asset-input-row.amazon { background-color: #fff7ed; span { color: #c2410c; } }
+.asset-input-row.other { background-color: #f5f3ff; span { color: #6d28d9; } }
+
+.asset-input-row input {
+  flex: 1;
+  text-align: right;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.total-calc-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background-color: #fdf2f8;
+  border-radius: 8px;
+  border: 1px solid #fbcfe8;
+  font-size: 0.9rem;
+  color: #831843;
+}
+
+.calc-amount {
+  font-size: 1.25rem;
+  color: #db2777;
+  font-family: monospace;
+}
+
+.submit-create-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: #db2777;
+  color: white;
+  padding: 11px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  margin-top: 6px;
+}
+
+.submit-create-btn:hover {
+  background-color: #be185d;
+}
+
+.submit-create-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* モーダルスタイル（多重化せず単一で快適・上に見切れない完全センタリング） */
+.ext-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  z-index: 1000;
+  padding: 40px 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ext-modal-content {
+  background: white;
+  border-radius: 14px;
+  padding: 24px;
+  width: 100%;
+  max-width: 540px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
+  margin: auto;
+  max-height: min(92vh, 760px);
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+}
+
+.modal-header h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: #0f172a;
+  background-color: #f1f5f9;
+}
+
+.modal-lead {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0 0 14px 0;
+  line-height: 1.5;
+  flex-shrink: 0;
+}
+
+.modal-form-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  flex: 1;
+  padding: 2px 4px 6px 2px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.edit-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 600px) {
+  .edit-asset-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.edit-asset-box {
+  padding: 10px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edit-asset-box.cash { background-color: #eff6ff; border: 1px solid #bfdbfe; }
+.edit-asset-box.amazon { background-color: #fff7ed; border: 1px solid #fed7aa; }
+.edit-asset-box.other { background-color: #f5f3ff; border: 1px solid #ddd6fe; }
+
+.box-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.edit-asset-box.cash .box-title { color: #1e40af; }
+.edit-asset-box.amazon .box-title { color: #c2410c; }
+.edit-asset-box.other .box-title { color: #6d28d9; }
+
+.box-used {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.convert-target-info {
+  background-color: #f8fafc;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.85rem;
+  color: #334155;
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.convert-types-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.note-sub {
+  font-size: 0.75rem;
+  font-weight: normal;
+  color: #64748b;
+  margin-left: 6px;
+}
+
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.btn-cancel {
+  background: white;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.btn-cancel:hover {
+  background-color: #f8fafc;
+}
+
+.btn-save {
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  padding: 8px 18px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.btn-save:hover {
+  background-color: #1d4ed8;
+}
+
+.btn-save.pink {
+  background-color: #db2777;
+}
+
+.btn-save.pink:hover {
+  background-color: #be185d;
+}

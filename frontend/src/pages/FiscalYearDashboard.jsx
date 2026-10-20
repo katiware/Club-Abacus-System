@@ -26,16 +26,27 @@ function FiscalYearDashboard() {
     pendingTotal: 0,
     futureRecurringTotal: 0,
     totalRequestsCount: 0,
-    categoryTotals: {}
+    totalRequestsCount: 0,
+    categoryTotals: {},
+    externalBudgetTotal: 0,
+    externalBudgetUsedTotal: 0
   });
 
+  const userRole = localStorage.getItem('userRole') || 'USER';
+  const isManagerOrAdmin = userRole === 'ADMIN' || userRole === 'MANAGER';
+
+  const [externalBudgets, setExternalBudgets] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchSummary = async () => {
       try {
-        const response = await api.get(`/Expense/summary?viewMode=all&fiscalYearId=${id}`);
-        setSummaryData(response.data);
+        const [sumRes, extRes] = await Promise.all([
+          api.get(`/Expense/summary?viewMode=all&fiscalYearId=${id}`),
+          isManagerOrAdmin ? api.get(`/ExternalBudget?fiscalYearId=${id}`) : Promise.resolve({ data: [] })
+        ]);
+        setSummaryData(sumRes.data);
+        setExternalBudgets(extRes.data || []);
       } catch (err) {
         console.error('Failed to fetch summary data', err);
       } finally {
@@ -43,7 +54,7 @@ function FiscalYearDashboard() {
       }
     };
     fetchSummary();
-  }, [id]);
+  }, [id, isManagerOrAdmin]);
 
   const { 
     pendingCount, 
@@ -74,7 +85,10 @@ function FiscalYearDashboard() {
 
   return (
     <div className="top-page-container fade-in">
-      <PageHeader title={`${yearName || '年度'} 予算・実績ダッシュボード`} backTo="/fiscal-years" />
+      <PageHeader 
+        title={`${yearName || '年度'} 予算・実績ダッシュボード`} 
+        backTo={isManagerOrAdmin ? "/fiscal-years" : "/top"} 
+      />
 
       <main className="top-page-content" style={{ marginTop: '20px' }}>
         
@@ -247,6 +261,73 @@ function FiscalYearDashboard() {
             </div>
           )}
 
+          {/* 部費外予算（特別予算・自己負担等）の消化状況（主将会計・管理者のみ表示） */}
+          {isManagerOrAdmin && externalBudgets && externalBudgets.length > 0 && (
+            <div style={{ marginTop: '36px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: '700', color: '#1f2937', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Calculator size={20} className="text-pink-600" />
+                  部費外予算（OB寄付金・特別助成等）の状況
+                </h3>
+                <button 
+                  onClick={() => navigate(`/external-budgets/${id}`)}
+                  style={{ fontSize: '0.85rem', color: '#db2777', fontWeight: 'bold', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  部費外予算の管理・設定へ →
+                </button>
+              </div>
+
+              <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+                {externalBudgets.map(b => {
+                  const usedPct = b.totalAmount > 0 ? Math.min(Math.round((b.usedAmount / b.totalAmount) * 100), 100) : 0;
+                  return (
+                    <div key={b.id} className="dashboard-card" style={{ padding: '20px', backgroundColor: 'white', borderTop: '4px solid #ec4899', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <span style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#111827' }}>{b.name}</span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#be185d', backgroundColor: '#fdf2f8', padding: '2px 8px', borderRadius: '12px' }}>
+                          消化率 {usedPct}%
+                        </span>
+                      </div>
+                      
+                      {b.description && (
+                        <p style={{ fontSize: '0.8rem', color: '#6b7280', margin: '0 0 12px 0' }}>{b.description}</p>
+                      )}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+                        <div>
+                          <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>残高: </span>
+                          <span style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#059669' }}>¥{(b.remainingAmount || 0).toLocaleString()}</span>
+                        </div>
+                        <div style={{ fontSize: '0.8rem', color: '#6b7280' }}>
+                          枠: ¥{b.totalAmount.toLocaleString()}
+                        </div>
+                      </div>
+
+                      <div style={{ width: '100%', height: '8px', backgroundColor: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${usedPct}%`, height: '100%', backgroundColor: '#ec4899', transition: 'width 0.4s' }} />
+                      </div>
+
+                      <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #f1f5f9', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', fontSize: '0.75rem' }}>
+                        <div style={{ backgroundColor: '#eff6ff', padding: '4px 6px', borderRadius: '4px' }}>
+                          <span style={{ color: '#1e40af', fontWeight: 'bold' }}>💵 現金</span><br/>
+                          <span style={{ fontWeight: 'bold', color: '#1e3a8a' }}>¥{(b.remainingCashAmount || 0).toLocaleString()}</span>
+                        </div>
+                        <div style={{ backgroundColor: '#fff7ed', padding: '4px 6px', borderRadius: '4px' }}>
+                          <span style={{ color: '#c2410c', fontWeight: 'bold' }}>🎁 アマギフ</span><br/>
+                          <span style={{ fontWeight: 'bold', color: '#7c2d12' }}>¥{(b.remainingAmazonGiftAmount || 0).toLocaleString()}</span>
+                        </div>
+                        <div style={{ backgroundColor: '#f5f3ff', padding: '4px 6px', borderRadius: '4px' }}>
+                          <span style={{ color: '#6d28d9', fontWeight: 'bold' }}>🏷️ その他</span><br/>
+                          <span style={{ fontWeight: 'bold', color: '#4c1d95' }}>¥{(b.remainingOtherAmount || 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* 補足ガイド */}
           <div style={{ marginTop: '36px', padding: '20px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px' }}>
             <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', fontWeight: 'bold', color: '#334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -254,10 +335,11 @@ function FiscalYearDashboard() {
               💡 予算管理・計算ルールについて
             </h4>
             <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.85rem', color: '#64748b', lineHeight: '1.6' }}>
-              <li><strong>確定支出:</strong> 大学UNIPAへの申請が完了した申請、および部員への精算手渡しが完了した経費の合計です。</li>
-              <li><strong>事前承認済枠:</strong> 事前承認され、部員による購入や証憑提出・精算を待っている経費の合計です。</li>
+              <li><strong>部費残高の計算基準:</strong> 各申請で「部費外充当」された金額は部費予算を消費しません。実質部費負担分のみが差し引かれます。</li>
+              <li><strong>確定支出:</strong> 大学UNIPAへの申請が完了した申請、および部員への精算手渡しが完了した経費の実質部費負担合計です。</li>
+              <li><strong>事前承認済枠:</strong> 事前承認され、部員による購入や証憑提出・精算を待っている経費の実質部費負担合計です。</li>
               <li><strong>定期支払予定:</strong> 登録されている有効な定期支払いテンプレートが今年度中に自動生成する見込み金額です。</li>
-              <li><strong>実質利用可能残高:</strong> 予算総額から上記3つをすべて控除した「今後新しく使える残額」です。</li>
+              <li><strong>大学却下時の予算復元:</strong> 大学への申請において不認可・却下となった場合、確保されていた部費予算は即座に解放（復活）されます。</li>
             </ul>
           </div>
 
