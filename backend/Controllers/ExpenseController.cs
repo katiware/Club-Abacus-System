@@ -985,12 +985,27 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
     }
 
     /// <summary>
+    /// 申請の現金手渡し必要額を算出します。非現金（Amazonギフト等）で充当された部費外予算がある場合はその分を除きます。
+    /// </summary>
+    private static int GetCashPayoutAmount(ExpenseRequest expense)
+    {
+        if (expense.ExternalBudgetAmount > 0 && expense.ExternalBudgetAssetType.HasValue && expense.ExternalBudgetAssetType.Value != ExternalBudgetAssetType.Cash)
+        {
+            return Math.Max(0, expense.TotalAmount - expense.ExternalBudgetAmount);
+        }
+        return expense.TotalAmount;
+    }
+
+    /// <summary>
     /// 複数の経費申請の金種計算を行います。
-    /// （個別の申請ごとに必要な金種を計算し、その結果を合算します）
+    /// （groupByPerson=true の場合は同一人物の申請を合算してから金種を計算します）
     /// </summary>
     [HttpPost("calculate-denominations")]
     [RequirePermission(PermissionType.ExpenseSettle)]
-    public async Task<ActionResult<DenominationResultDto>> CalculateDenominations([FromBody] List<Guid> expenseIds, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<DenominationResultDto>> CalculateDenominations(
+        [FromBody] List<Guid> expenseIds, 
+        [FromQuery] bool groupByPerson = false, 
+        CancellationToken cancellationToken = default)
     {
         var expenses = await context.ExpenseRequests
             .Where(e => expenseIds.Contains(e.Id))
@@ -1000,10 +1015,30 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         var totalResult = new DenominationResultDto();
 
-        foreach (var expense in expenses)
+        if (groupByPerson)
         {
-            var result = CalculateDenominationForAmount(expense.TotalAmount);
-            totalResult.Add(result);
+            var grouped = expenses.GroupBy(e => e.UserId);
+            foreach (var g in grouped)
+            {
+                var personTotal = g.Sum(GetCashPayoutAmount);
+                if (personTotal > 0)
+                {
+                    var result = CalculateDenominationForAmount(personTotal);
+                    totalResult.Add(result);
+                }
+            }
+        }
+        else
+        {
+            foreach (var expense in expenses)
+            {
+                var cashAmount = GetCashPayoutAmount(expense);
+                if (cashAmount > 0)
+                {
+                    var result = CalculateDenominationForAmount(cashAmount);
+                    totalResult.Add(result);
+                }
+            }
         }
 
         return Ok(totalResult);
@@ -1011,20 +1046,21 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
     /// <summary>
     /// 特定の月（1ヶ月分）の経費申請すべてを対象に金種計算をまとめて行います。
+    /// （groupByPerson=true の場合は同一人物の申請を合算してから金種を計算します）
     /// </summary>
     [HttpGet("denominations/monthly")]
     [RequirePermission(PermissionType.ExpenseSettle)]
-    public async Task<ActionResult<DenominationResultDto>> GetMonthlyDenominations(int year, int month, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<DenominationResultDto>> GetMonthlyDenominations(
+        int year, 
+        int month, 
+        [FromQuery] bool groupByPerson = false, 
+        CancellationToken cancellationToken = default)
     {
         // 指定された年月の月初と翌月初を取得
         var startDate = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc);
         var endDate = startDate.AddMonths(1);
 
         // 指定月に作成された申請のうち、有効なもの（下書き・却下以外）を取得します。
-        // ※ 運用ロジック:
-        // 「事前出金 (Advance)」は「承認済 (Approved)」が手渡し待ち
-        // 「立替 (Reimbursement)」は「大学へ申請完了 (UniversitySubmitted)」の後に精算するルールと仮定します。
-        // さらに、Createdではなくステータス更新日(UpdatedAt)で期間を絞り込みます。
         var expenses = await context.ExpenseRequests
             .Where(e => e.UpdatedAt >= startDate && e.UpdatedAt < endDate)
             .Where(e => (e.Type == ExpenseType.Advance && e.Status == ExpenseStatus.Approved) ||
@@ -1033,10 +1069,30 @@ public class ExpenseController(AppDbContext context, Club_Abacus_System.Services
 
         var totalResult = new DenominationResultDto();
 
-        foreach (var expense in expenses)
+        if (groupByPerson)
         {
-            var result = CalculateDenominationForAmount(expense.TotalAmount);
-            totalResult.Add(result);
+            var grouped = expenses.GroupBy(e => e.UserId);
+            foreach (var g in grouped)
+            {
+                var personTotal = g.Sum(GetCashPayoutAmount);
+                if (personTotal > 0)
+                {
+                    var result = CalculateDenominationForAmount(personTotal);
+                    totalResult.Add(result);
+                }
+            }
+        }
+        else
+        {
+            foreach (var expense in expenses)
+            {
+                var cashAmount = GetCashPayoutAmount(expense);
+                if (cashAmount > 0)
+                {
+                    var result = CalculateDenominationForAmount(cashAmount);
+                    totalResult.Add(result);
+                }
+            }
         }
 
         return Ok(totalResult);
