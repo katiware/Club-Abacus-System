@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserPlus, Shield, ShieldOff, Trash2, Check, X, AlertCircle, Edit, Upload } from 'lucide-react';
+import { UserPlus, Shield, ShieldCheck, ShieldOff, Trash2, Check, X, AlertCircle, Edit, Upload } from 'lucide-react';
 import { PageHeader } from '../components/PageHeader';
 import api from '../services/api';
 import './UserManagement.css';
@@ -202,18 +202,34 @@ function UserManagement() {
             <tbody>
               {users.map(user => (
                 <tr key={user.id} className={`table-row ${!user.isActive ? 'inactive-row' : ''}`}>
-                  <td className="font-medium">{user.name}</td>
+                  <td className="font-medium">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span>{user.name}</span>
+                      {user.roleName === 'ADMIN' && (
+                        <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '4px', backgroundColor: '#f3e8ff', color: '#7e22ce', fontWeight: 'bold', border: '1px solid #e9d5ff' }}>管理者</span>
+                      )}
+                      {user.roleName === 'MANAGER' && (
+                        <span style={{ fontSize: '10px', padding: '1px 5px', borderRadius: '4px', backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 'bold', border: '1px solid #c7d2fe' }}>主将会計</span>
+                      )}
+                    </div>
+                  </td>
                   <td className="text-gray-500">{user.email}</td>
                   <td className="text-gray-500">{user.studentId || '-'}</td>
                   <td className="text-gray-500">{user.enrollmentYear ? `${user.enrollmentYear}年度` : '-'}</td>
                   <td>
-                    <span 
-                      className={`role-badge ${user.roleName === 'ADMIN' ? 'role-admin' : 'role-member'}`}
-                      style={{ cursor: 'default' }}
-                    >
-                      {user.roleName === 'ADMIN' ? <Shield size={14} /> : <ShieldOff size={14} />}
-                      {user.roleName === 'ADMIN' ? '管理者' : (user.roleName || '未割当')}
-                    </span>
+                    {user.roleName === 'ADMIN' ? (
+                      <span className="role-badge" style={{ cursor: 'default', backgroundColor: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff' }}>
+                        <Shield size={14} /> 管理者
+                      </span>
+                    ) : user.roleName === 'MANAGER' ? (
+                      <span className="role-badge" style={{ cursor: 'default', backgroundColor: '#e0e7ff', color: '#3730a3', border: '1px solid #c7d2fe' }}>
+                        <ShieldCheck size={14} /> 主将会計
+                      </span>
+                    ) : (
+                      <span className="role-badge role-member" style={{ cursor: 'default' }}>
+                        <ShieldOff size={14} /> 一般部員
+                      </span>
+                    )}
                   </td>
                   <td>
                     <span 

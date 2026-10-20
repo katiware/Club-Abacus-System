@@ -56,9 +56,10 @@ public class RecurringExpenseBatchService : BackgroundService
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        // NextGenerationDate が今日以前で、かつ有効なテンプレートを取得
+        // NextGenerationDate が今日以前で、かつ承認済・有効なテンプレートを取得
         var templatesToProcess = await dbContext.RecurringExpenseTemplates
             .Where(t => t.TemplateStatus == TemplateStatus.Active
+                     && t.ApprovalStatus == ExpenseStatus.Approved
                      && t.DeletedAt == null
                      && t.NextGenerationDate <= today)
             .ToListAsync(stoppingToken);

@@ -372,23 +372,24 @@ function FiscalYearSettings() {
                           <button 
                             className="primary-btn" 
                             style={{ 
-                              backgroundColor: activeYear ? '#94a3b8' : '#12b886',
-                              cursor: activeYear ? 'not-allowed' : 'pointer'
+                              backgroundColor: '#12b886',
+                              cursor: 'pointer'
                             }}
-                            disabled={!!activeYear}
-                            title={activeYear ? `すでに${activeYear.yearName}が進行中のため開始できません` : '年度を開始します'}
+                            title={activeYear ? `進行中の${activeYear.yearName}を締めて、この年度を開始します` : '年度を開始します'}
                             onClick={async (e) => {
                               e.stopPropagation();
+                              let confirmMsg = `「${fy.yearName}」を開始しますか？`;
                               if (activeYear) {
-                                alert(`現在【${activeYear.yearName}】が進行中です。\n複数年度を同時に進行させることはできません。現在の年度を締め切ってから開始してください。`);
-                                return;
+                                confirmMsg = `現在【${activeYear.yearName}】が進行中です。\n「${fy.yearName}」を開始すると、前年度（${activeYear.yearName}）は自動的に締め切られ、スムーズに新年度に移行します。\n開始してもよろしいですか？`;
                               }
+                              if (!window.confirm(confirmMsg)) return;
+
                               try {
-                                await api.post(`/FiscalYear/${fy.id}/start`);
-                                alert('年度を開始しました。');
+                                const res = await api.post(`/FiscalYear/${fy.id}/start?autoClosePrevious=true`);
+                                alert(res.data?.message || '年度を開始しました。');
                                 await fetchFiscalYears();
                               } catch (err) {
-                                alert(`エラー: ${err.response?.data || '開始に失敗しました'}`);
+                                alert(`エラー: ${err.response?.data?.message || err.response?.data || '開始に失敗しました'}`);
                               }
                             }}
                           >
@@ -447,11 +448,27 @@ function FiscalYearSettings() {
                           </>
                         )}
 
-                        {/* 締め済み年度（締め解除は基本的に不可・静的表示） */}
+                        {/* 締め済み年度 */}
                         {fy.isClosed && (
-                          <span style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                            <Lock size={13} /> 締め済み（過去確定年度・変更不可）
-                          </span>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 12px', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                              <Lock size={13} /> 締め済み
+                            </span>
+                            {isAdmin && (
+                              <button
+                                className="secondary-btn"
+                                style={{ color: '#4f46e5', borderColor: '#c7d2fe', padding: '6px 12px', fontSize: '12px' }}
+                                title="【管理者保険】誤って締めてしまった年度の締め処理を取り消して再開します"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleReopen(fy.id, fy.yearName);
+                                }}
+                              >
+                                <RotateCcw size={13} style={{ marginRight: '4px' }} />
+                                締め解除（再開）
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>

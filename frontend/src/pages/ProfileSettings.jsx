@@ -54,13 +54,14 @@ function ProfileSettings() {
   };
 
   const handleManagerRequest = async () => {
-    if (!confirm('マネージャー権限を申請しますか？\n大学のメールアドレス宛に確認メールが送信されます。')) {
+    if (!confirm('マネージャー（主将会計）権限を申請・昇格しますか？\n（※近畿大学 @hiro.kindai.ac.jp のアカウントのみ利用可能です）')) {
       return;
     }
     
     try {
       const response = await api.post('/RolePromotion/request-manager');
-      alert(response.data.message || '確認メールを送信しました。メールボックスを確認してください。');
+      alert(response.data.message || 'マネージャー（主将会計）権限に昇格しました。');
+      window.location.reload();
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.message || err.response?.data || 'リクエストに失敗しました。');
@@ -101,13 +102,13 @@ function ProfileSettings() {
               <div className="form-group" style={{ marginTop: '24px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                   <Shield size={18} color="#4f46e5" />
-                  <h3 style={{ margin: 0, fontSize: '16px', color: '#111827' }}>マネージャー昇格</h3>
+                  <h3 style={{ margin: 0, fontSize: '16px', color: '#111827' }}>主将会計（マネージャー）昇格</h3>
                 </div>
                 <p style={{ fontSize: '14px', color: '#4b5563', marginBottom: '12px', lineHeight: '1.5' }}>
-                  会計担当者など、システム上で申請の確認や承認を行う必要がある方は、こちらからマネージャー権限をリクエストしてください。
+                  主将や会計担当者など、システム上で経費申請の確認や承認を行う権限を取得します（※近畿大学 @hiro.kindai.ac.jp のアカウント限定）。
                 </p>
                 <button className="secondary-btn" onClick={handleManagerRequest}>
-                  昇格をリクエストする
+                  主将会計に昇格する
                 </button>
               </div>
             )}
