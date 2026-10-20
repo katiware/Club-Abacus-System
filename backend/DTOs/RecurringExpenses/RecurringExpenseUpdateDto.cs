@@ -11,6 +11,8 @@ public class RecurringExpenseUpdateDto
 
     public TemplateStatus? TemplateStatus { get; set; }
 
+    public ExpenseStatus? ApprovalStatus { get; set; }
+
     [MaxLength(255)]
     public string? ItemName { get; set; }
 

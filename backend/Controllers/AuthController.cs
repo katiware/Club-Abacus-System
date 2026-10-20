@@ -68,7 +68,7 @@ public class AuthController(
             }
         }
 
-        return email.EndsWith("@hiro.kindai.ac.jp");
+        return email.EndsWith("@hiro.kindai.ac.jp", StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpPost("login")]
@@ -83,6 +83,7 @@ public class AuthController(
             if (token == null) return Unauthorized(new { Message = "無効な認証トークンです。" });
 
             var email = token.Claims.First(c => c.Type == "email").Value;
+            var googleName = token.Claims.FirstOrDefault(c => c.Type == "name")?.Value;
 
             var user = await context.Users
                 .Include(u => u.Role)
@@ -94,6 +95,14 @@ public class AuthController(
             if (!IsValidDomainAndMember(email, user))
             {
                 return BadRequest(new { Message = "指定されたドメインのメールアドレスではありません（@hiro.kindai.ac.jpのみ許可されています）。" });
+            }
+
+            // 初期管理者などのデフォルト名の場合、Googleアカウントの実際の名前に更新する
+            if (!string.IsNullOrWhiteSpace(googleName) && (user.Name.StartsWith("初期管理者") || string.IsNullOrWhiteSpace(user.Name)))
+            {
+                user.Name = googleName;
+                user.UpdatedAt = DateTime.UtcNow;
+                await userManager.UpdateAsync(user);
             }
 
             var jwtToken = jwtTokenService.GenerateJwtToken(user);

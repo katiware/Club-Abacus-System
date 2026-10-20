@@ -531,9 +531,22 @@ function ApplicationDetail() {
   }
 
   const applicantName = app.user?.name || '不明';
+  const applicantRole = app.user?.role?.name || app.user?.roleName || '';
   const typeStr = app.type === 'Advance' ? '事前出金' : '立替払い';
   const methodStr = app.receiptType === 'Paper' ? '実店舗購入' : 'Web購入';
   const dateStr = new Date(app.createdAt).toLocaleDateString();
+
+  const renderApplicantWithRole = () => (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+      <strong>{applicantName}</strong>
+      {applicantRole === 'ADMIN' && (
+        <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#f3e8ff', color: '#7e22ce', fontWeight: 'bold' }}>管理者</span>
+      )}
+      {applicantRole === 'MANAGER' && (
+        <span style={{ fontSize: '11px', padding: '1px 6px', borderRadius: '4px', backgroundColor: '#e0e7ff', color: '#3730a3', fontWeight: 'bold' }}>主将会計</span>
+      )}
+    </span>
+  );
 
   return (
     <div className="application-detail-container fade-in">
@@ -573,7 +586,7 @@ function ApplicationDetail() {
               </div>
               <div className="info-item">
                 <span className="info-label">申請者</span>
-                <span className="info-value">{applicantName}</span>
+                <span className="info-value">{renderApplicantWithRole()}</span>
               </div>
               <div className="info-item">
                 <span className="info-label">申請日</span>

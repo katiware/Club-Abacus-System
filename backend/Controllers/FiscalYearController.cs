@@ -143,11 +143,11 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
 
     /// <summary>
     /// 年度を開始します（IsActive = true）。
-    /// すでに進行中の年度がある場合はエラーになります。
+    /// autoClosePrevious=true の場合、すでに進行中の前年度があれば自動的に締め処理を行い、スムーズに新年度へ移行します。
     /// </summary>
     [HttpPost("{id}/start")]
     [RequirePermission(PermissionType.ManageMasterData)]
-    public async Task<IActionResult> StartFiscalYear(Guid id)
+    public async Task<IActionResult> StartFiscalYear(Guid id, [FromQuery] bool autoClosePrevious = true)
     {
         var fiscalYear = await context.FiscalYears.FindAsync(id);
 
@@ -158,7 +158,7 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
 
         if (fiscalYear.IsClosed)
         {
-            return BadRequest("締め済みの年度は開始できません。");
+            return BadRequest("締め済みの年度は開始できません。再開したい場合は締め解除（再オープン）を行ってください。");
         }
 
         if (fiscalYear.IsActive)
@@ -166,10 +166,37 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
             return BadRequest("この年度はすでに進行中です。");
         }
 
-        var hasActive = await context.FiscalYears.AnyAsync(f => f.IsActive);
-        if (hasActive)
+        var activeYears = await context.FiscalYears.Where(f => f.IsActive && f.Id != id).ToListAsync();
+        if (activeYears.Any())
         {
-            return BadRequest("すでに進行中の年度が存在します。現在の年度を締めてから新しい年度を開始してください。");
+            if (autoClosePrevious)
+            {
+                // 進行中の旧年度を自動的に締め処理して新年度へスムーズに切り替える
+                foreach (var oldYear in activeYears)
+                {
+                    oldYear.IsActive = false;
+                    oldYear.IsClosed = true;
+                    oldYear.UpdatedAt = DateTime.UtcNow;
+
+                    // 未完了の申請を自動却下
+                    var pendingRequests = await context.ExpenseRequests
+                        .Where(e => e.Status != ExpenseStatus.Settled && e.Status != ExpenseStatus.Rejected && e.Status != ExpenseStatus.UniversitySubmitted)
+                        .Where(e => e.CreatedAt >= oldYear.StartDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc) && 
+                                    e.CreatedAt <= oldYear.EndDate.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc))
+                        .ToListAsync();
+
+                    foreach (var req in pendingRequests)
+                    {
+                        req.Status = ExpenseStatus.Rejected;
+                        req.RejectionReason = $"新年度 ({fiscalYear.YearName}) 開始に伴う前年度締め自動却下";
+                        req.UpdatedAt = DateTime.UtcNow;
+                    }
+                }
+            }
+            else
+            {
+                return BadRequest("すでに進行中の年度が存在します。autoClosePrevious=true を指定するか、現在の年度を締めてから開始してください。");
+            }
         }
 
         fiscalYear.IsActive = true;
@@ -177,7 +204,7 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
 
         await context.SaveChangesAsync();
 
-        return NoContent();
+        return Ok(new { message = $"年度「{fiscalYear.YearName}」を開始しました。", fiscalYear });
     }
 
     /// <summary>
@@ -208,7 +235,7 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
     }
 
     /// <summary>
-    /// 年度を締めます（IsClosed = true）。締め後は変更不可になります。
+    /// 年度を締めます（IsClosed = true）。
     /// 未完了の申請がある場合、force=false だと 409 Conflict を返し、
     /// force=true だとそれらを自動却下して締め処理を完了します。
     /// </summary>
@@ -264,10 +291,10 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
     }
 
     /// <summary>
-    /// 誤って開始した年度を「未開始」ステータスに戻します（システム管理者専用の保険措置）。
+    /// 誤って開始した年度を「未開始」ステータスに戻します（主将会計・管理者向けリカバリー）。
     /// </summary>
     [HttpPost("{id}/stop")]
-    [Authorize(Roles = "ADMIN")]
+    [RequirePermission(PermissionType.ManageMasterData)]
     public async Task<IActionResult> StopFiscalYear(Guid id)
     {
         var fiscalYear = await context.FiscalYears.FindAsync(id);
@@ -291,13 +318,38 @@ public class FiscalYearController(AppDbContext context) : ControllerBase
     }
 
     /// <summary>
-    /// 年度の締め解除は規程上基本的に禁止されています。
+    /// 誤って締めた年度の締め処理を取り消し、再開または未開始に戻します（システム管理者専用リカバリー）。
     /// </summary>
     [HttpPost("{id}/reopen")]
     [Authorize(Roles = "ADMIN")]
-    public Task<IActionResult> ReopenFiscalYear(Guid id, [FromQuery] bool makeActive = true)
+    public async Task<IActionResult> ReopenFiscalYear(Guid id, [FromQuery] bool makeActive = true)
     {
-        return Task.FromResult<IActionResult>(BadRequest("年度の締め解除は会計監査・規程上、原則として禁止されています。締められた過去年度を再オープンすることはできません。"));
+        var fiscalYear = await context.FiscalYears.FindAsync(id);
+
+        if (fiscalYear == null)
+        {
+            return NotFound("指定された年度は見つかりません。");
+        }
+
+        if (!fiscalYear.IsClosed)
+        {
+            return BadRequest("この年度は締められていません。");
+        }
+
+        var hasOtherActive = await context.FiscalYears.AnyAsync(f => f.IsActive && f.Id != id);
+
+        fiscalYear.IsClosed = false;
+        // 他に進行中の年度がなければ makeActive を尊重、ある場合は未開始状態として再開
+        fiscalYear.IsActive = !hasOtherActive && makeActive;
+        fiscalYear.UpdatedAt = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        return Ok(new 
+        { 
+            message = $"年度「{fiscalYear.YearName}」の締め処理を取り消しました。ステータス: {(fiscalYear.IsActive ? "進行中" : "開始前")}",
+            fiscalYear 
+        });
     }
 
     /// <summary>

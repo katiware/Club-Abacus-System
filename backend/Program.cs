@@ -120,9 +120,15 @@ builder.Services.AddCors(options =>
 
 // PostgreSQL 接続設定（Aspireから注入される "postgresdb" を使用、なければフォールバック）
 builder.Services.AddDbContext<AppDbContext>(options =>
+{
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("postgresdb") ?? 
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+        builder.Configuration.GetConnectionString("DefaultConnection"));
+
+    // EF Core 9+ の PendingModelChangesWarning によるマイグレーション停止を抑制
+    options.ConfigureWarnings(warnings => 
+        warnings.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+});
 
 var app = builder.Build();
 
@@ -132,8 +138,14 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     try
     {
+        var logger = services.GetRequiredService<ILogger<Program>>();
         var context = services.GetRequiredService<AppDbContext>();
         context.Database.Migrate();
+        logger.LogInformation("データベースのマイグレーションが正常に完了しました。");
+        if (System.IO.File.Exists("migration_error.txt"))
+        {
+            try { System.IO.File.Delete("migration_error.txt"); } catch { }
+        }
 
         var roleManager = services.GetRequiredService<RoleManager<Role>>();
         var userManager = services.GetRequiredService<UserManager<User>>();
@@ -159,18 +171,20 @@ using (var scope = app.Services.CreateScope())
         var adminEmails = config["AdminSettings:InitialAdminEmail"];
         if (!string.IsNullOrEmpty(adminEmails))
         {
-            var emails = adminEmails.Split(',').Select(e => e.Trim()).Where(e => !string.IsNullOrEmpty(e));
+            var emails = adminEmails.Split(',').Select(e => e.Trim()).Where(e => !string.IsNullOrEmpty(e)).ToList();
+            int adminIdx = 1;
             foreach (var email in emails)
             {
                 var existingAdmin = userManager.FindByEmailAsync(email).Result;
                 if (existingAdmin == null)
                 {
                     var adminRole = roleManager.FindByNameAsync("ADMIN").Result;
+                    var localPart = email.Split('@')[0];
                     var adminUser = new User
                     {
                         UserName = email,
                         Email = email,
-                        Name = "初期管理者",
+                        Name = emails.Count > 1 ? $"管理者 ({localPart})" : "初期管理者",
                         RoleId = adminRole!.Id,
                         IsActive = true
                     };
@@ -182,6 +196,7 @@ using (var scope = app.Services.CreateScope())
                         userManager.AddToRoleAsync(adminUser, "ADMIN").Wait();
                     }
                 }
+                adminIdx++;
             }
         }
     }

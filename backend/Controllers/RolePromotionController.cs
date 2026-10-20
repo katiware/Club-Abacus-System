@@ -29,20 +29,24 @@ public class RolePromotionController(
 
         if (user.RoleId == managerRole.Id) return BadRequest("すでに該当する権限を持っています。");
 
-        // Identityの仕組みでプロモーション用トークンを生成する
-        var token = await userManager.GenerateUserTokenAsync(user, "Default", "ManagerPromotion");
+        // ドメインチェック: 近畿大学工学部ドメイン (@hiro.kindai.ac.jp) のみ許可
+        if (string.IsNullOrEmpty(user.Email) || !user.Email.EndsWith("@hiro.kindai.ac.jp", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("マネージャー（主将会計）への昇格は @hiro.kindai.ac.jp ドメインの近畿大学アカウントのみ許可されています。");
+        }
 
-        // 本来はここでメール送信する。今回はログ出力のみ(ダミー送信)
-        var callbackUrl = Url.Action("ConfirmManagerPromotion", "RolePromotion", new { userId = user.Id, token = token }, protocol: HttpContext.Request.Scheme);
-        
-        logger.LogInformation("===========================================");
-        logger.LogInformation("【ダミーメール送信】");
-        logger.LogInformation("宛先: {Email}", user.Email);
-        logger.LogInformation("件名: マネージャー昇格リクエストの確認");
-        logger.LogInformation("本文: 以下のURLをクリックしてマネージャー昇格を完了してください。\n{CallbackUrl}", callbackUrl);
-        logger.LogInformation("===========================================");
+        var targetManagerRole = context.Roles.FirstOrDefault(r => r.Name == "MANAGER");
+        if (targetManagerRole == null) return StatusCode(500, "システムにMANAGERロールが存在しません。");
 
-        return Ok(new { Message = "昇格確認メールを送信しました。メール内のリンクをクリックして完了してください。" });
+        user.RoleId = targetManagerRole.Id;
+        user.UpdatedAt = DateTime.UtcNow;
+
+        var result = await userManager.UpdateAsync(user);
+        if (!result.Succeeded) return StatusCode(500, "権限の更新に失敗しました。");
+
+        logger.LogInformation("ユーザー {Email} (ID: {UserId}) がマネージャー（主将会計）に昇格しました。", user.Email, user.Id);
+
+        return Ok(new { Message = "マネージャー（主将会計）権限に昇格しました。画面を再読み込みするか、再度ログインしてください。" });
     }
 
     [HttpGet("confirm-manager")]

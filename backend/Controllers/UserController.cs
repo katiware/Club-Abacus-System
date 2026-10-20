@@ -218,8 +218,15 @@ public class UserController(UserManager<User> userManager, AppDbContext context)
 
         if (dto.RoleId.HasValue)
         {
-            var roleExists = await context.Roles.AnyAsync(r => r.Id == dto.RoleId.Value);
-            if (!roleExists) return BadRequest("指定されたRoleは存在しません。");
+            var role = await context.Roles.FirstOrDefaultAsync(r => r.Id == dto.RoleId.Value);
+            if (role == null) return BadRequest("指定されたRoleは存在しません。");
+
+            // 管理者(ADMIN)以外かつMANAGERにする場合、近畿大学ドメイン制限
+            if (role.Name == "MANAGER" && (string.IsNullOrEmpty(user.Email) || !user.Email.EndsWith("@hiro.kindai.ac.jp", StringComparison.OrdinalIgnoreCase)))
+            {
+                return BadRequest("主将会計（MANAGER）のメールアドレスは @hiro.kindai.ac.jp ドメインである必要があります。");
+            }
+
             user.RoleId = dto.RoleId.Value;
         }
 

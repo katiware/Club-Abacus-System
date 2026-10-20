@@ -46,7 +46,39 @@ export default function RecurringPayments() {
   ) : '';
   const jwtUserName = decoded ? (decoded.name || decoded['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'] || '自分') : '自分';
 
+  const jwtRole = decoded ? (decoded.role || decoded['http://schemas.microsoft.com/ws/2008/06/identity/claims/role'] || '') : '';
+  const userRole = localStorage.getItem('userRole') || jwtRole || 'USER';
+  const isAdminOrManager = userRole === 'ADMIN' || userRole === 'MANAGER';
+
   const [currentUserId, setCurrentUserId] = useState(jwtUserId);
+
+  const handleApprove = async (e, id, name) => {
+    e.stopPropagation();
+    if (window.confirm(`「${name}」を承認して定期起票を有効化(Active)しますか？`)) {
+      try {
+        await api.post(`/RecurringExpense/${id}/approve`);
+        alert('テンプレートを承認しました。次回自動生成日から自動起票されます。');
+        await fetchTemplatesAndUsers();
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || err.response?.data || '承認に失敗しました。');
+      }
+    }
+  };
+
+  const handleReject = async (e, id, name) => {
+    e.stopPropagation();
+    if (window.confirm(`「${name}」の定期テンプレートを却下しますか？`)) {
+      try {
+        await api.post(`/RecurringExpense/${id}/reject`);
+        alert('テンプレートを却下しました。');
+        await fetchTemplatesAndUsers();
+      } catch (err) {
+        console.error(err);
+        alert(err.response?.data?.message || err.response?.data || '却下に失敗しました。');
+      }
+    }
+  };
 
   const getInitialFormState = (uid = currentUserId) => ({
     id: null,
@@ -118,7 +150,57 @@ export default function RecurringPayments() {
   const getReceiptTypeString = (type) => (type === 'Paper' || type === 1 ? '実店舗(紙)' : 'Web購入(PDF等)');
   const isActive = (status) => status === 'Active' || status === 0;
 
+  const renderApprovalStatus = (status) => {
+    if (status === 'PendingApproval' || status === 20) {
+      return (
+        <span style={{ 
+          fontSize: '11px', 
+          padding: '3px 8px', 
+          borderRadius: '10px', 
+          backgroundColor: '#fef3c7', 
+          color: '#b45309', 
+          fontWeight: '700',
+          border: '1px solid #fde68a'
+        }}>
+          承認待ち
+        </span>
+      );
+    }
+    if (status === 'Rejected' || status === 99) {
+      return (
+        <span style={{ 
+          fontSize: '11px', 
+          padding: '3px 8px', 
+          borderRadius: '10px', 
+          backgroundColor: '#fee2e2', 
+          color: '#b91c1c', 
+          fontWeight: '700',
+          border: '1px solid #fecaca'
+        }}>
+          却下
+        </span>
+      );
+    }
+    return (
+      <span style={{ 
+        fontSize: '11px', 
+        padding: '3px 8px', 
+        borderRadius: '10px', 
+        backgroundColor: '#dcfce7', 
+        color: '#15803d', 
+        fontWeight: '700',
+        border: '1px solid #bbf7d0'
+      }}>
+        承認済
+      </span>
+    );
+  };
+
   const toggleStatus = async (id, currentStatus) => {
+    if (!isAdminOrManager) {
+      alert('定期テンプレートの一時停止や再開は、主将会計または管理者のみ実行できます。');
+      return;
+    }
     const active = isActive(currentStatus);
     const newStatus = active ? 'Inactive' : 'Active';
     try {
@@ -128,7 +210,7 @@ export default function RecurringPayments() {
       await fetchTemplatesAndUsers();
     } catch (err) {
       console.error('Failed to toggle status', err);
-      alert('ステータスの変更に失敗しました。');
+      alert(err.response?.data?.message || err.response?.data || 'ステータスの変更に失敗しました。');
     }
   };
 
@@ -227,7 +309,11 @@ export default function RecurringPayments() {
           nextGenerationDate: formData.nextGenerationDate
         };
         await api.post('/RecurringExpense', payload);
-        alert('新しい定期支払いテンプレートを作成しました！');
+        if (isAdminOrManager) {
+          alert('新しい定期支払いテンプレートを作成しました（即時有効）！');
+        } else {
+          alert('定期支払いテンプレートの申請を提出しました！\n主将会計または管理者の承認後に定期自動起票が有効化されます。');
+        }
       } else {
         const payload = {
           templateName: formData.templateName,
@@ -244,7 +330,11 @@ export default function RecurringPayments() {
           receiptType: formData.receiptType
         };
         await api.put(`/RecurringExpense/${formData.id}`, payload);
-        alert('テンプレート情報を更新しました！');
+        if (isAdminOrManager) {
+          alert('テンプレート情報を更新しました！');
+        } else {
+          alert('テンプレート情報を更新しました（再承認待ちとなります）。');
+        }
       }
       setShowAddModal(false);
       await fetchTemplatesAndUsers();
@@ -315,11 +405,15 @@ export default function RecurringPayments() {
           <div className="template-grid">
             {templates.map(tpl => {
               const active = isActive(tpl.templateStatus);
+              const isPending = tpl.approvalStatus === 'PendingApproval' || tpl.approvalStatus === 20;
+              const isRejected = tpl.approvalStatus === 'Rejected' || tpl.approvalStatus === 99;
+
               return (
                 <div key={tpl.id} className={`template-card ${!active ? 'inactive' : ''}`} onClick={() => setSelectedTemplate(tpl)} style={{ cursor: 'pointer' }}>
                   <div className="tpl-header">
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                       <span className="tpl-badge">{getFreqString(tpl.recurringFrequency)}</span>
+                      {renderApprovalStatus(tpl.approvalStatus)}
                       <span style={{ 
                         fontSize: '11px', 
                         padding: '3px 8px', 
@@ -340,14 +434,16 @@ export default function RecurringPayments() {
                       >
                         <Edit2 size={16} />
                       </button>
-                      <button 
-                        className="icon-btn danger-text" 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(tpl.id, tpl.templateName); }} 
-                        title="削除"
-                        style={{ padding: '4px' }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {isAdminOrManager && (
+                        <button 
+                          className="icon-btn danger-text" 
+                          onClick={(e) => { e.stopPropagation(); handleDelete(tpl.id, tpl.templateName); }} 
+                          title="削除"
+                          style={{ padding: '4px' }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                   
@@ -371,24 +467,76 @@ export default function RecurringPayments() {
                     </span>
                   </div>
 
-                  <div className="tpl-footer" style={{ display: 'flex', gap: '8px' }}>
-                    <button 
-                      className={`status-toggle-btn ${active ? 'active' : 'paused'}`}
-                      onClick={(e) => { e.stopPropagation(); toggleStatus(tpl.id, tpl.templateStatus); }}
-                      style={{ flex: 1 }}
-                    >
-                      {active ? <Pause size={15} /> : <Play size={15} />}
-                      {active ? '一時停止' : '再開'}
-                    </button>
-                    {active && (
-                      <button 
-                        className="status-toggle-btn"
-                        style={{ flex: 1, backgroundColor: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
-                        onClick={(e) => handleGenerateManual(e, tpl.id, tpl.templateName)}
-                        title="次回生成日を待たずに今すぐ申請を起票します"
+                  {/* 管理者・主将会計向けの承認・却下アクション */}
+                  {isAdminOrManager && isPending && (
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #fde68a' }}>
+                      <button
+                        className="primary-btn"
+                        style={{ flex: 1, padding: '6px 10px', fontSize: '12px', backgroundColor: '#16a34a' }}
+                        onClick={(e) => handleApprove(e, tpl.id, tpl.templateName)}
+                        title="定期起票を承認して有効化します"
                       >
-                        手動生成
+                        ✓ 承認して有効化
                       </button>
+                      <button
+                        className="secondary-btn"
+                        style={{ flex: 1, padding: '6px 10px', fontSize: '12px', color: '#dc2626', borderColor: '#fca5a5' }}
+                        onClick={(e) => handleReject(e, tpl.id, tpl.templateName)}
+                        title="定期起票を却下します"
+                      >
+                        ✕ 却下
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="tpl-footer" style={{ display: 'flex', gap: '8px' }}>
+                    {isAdminOrManager ? (
+                      <>
+                        {!isPending && !isRejected && (
+                          <button 
+                            className={`status-toggle-btn ${active ? 'active' : 'paused'}`}
+                            onClick={(e) => { e.stopPropagation(); toggleStatus(tpl.id, tpl.templateStatus); }}
+                            style={{ flex: 1 }}
+                          >
+                            {active ? <Pause size={15} /> : <Play size={15} />}
+                            {active ? '一時停止' : '再開'}
+                          </button>
+                        )}
+                        {active && !isPending && (
+                          <button 
+                            className="status-toggle-btn"
+                            style={{ flex: 1, backgroundColor: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' }}
+                            onClick={(e) => handleGenerateManual(e, tpl.id, tpl.templateName)}
+                            title="次回生成日を待たずに今すぐ申請を起票します"
+                          >
+                            手動生成
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ 
+                        flex: 1, 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        gap: '6px',
+                        padding: '8px 12px', 
+                        background: active ? '#f0fdf4' : '#f8fafc', 
+                        border: `1px solid ${active ? '#bbf7d0' : '#e2e8f0'}`,
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        color: active ? '#166534' : '#64748b',
+                        fontWeight: '500'
+                      }}>
+                        <span style={{ 
+                          width: '8px', 
+                          height: '8px', 
+                          borderRadius: '50%', 
+                          backgroundColor: active ? '#22c55e' : '#94a3b8',
+                          display: 'inline-block' 
+                        }} />
+                        {active ? '自動起票 稼働中' : '一時停止中（主将会計が管理）'}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -416,7 +564,11 @@ export default function RecurringPayments() {
                 <span>{selectedTemplate.user?.name || '不明'}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
-                <span style={{ color: '#64748b' }}>ステータス:</span>
+                <span style={{ color: '#64748b' }}>承認状態:</span>
+                <div>{renderApprovalStatus(selectedTemplate.approvalStatus)}</div>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}>
+                <span style={{ color: '#64748b' }}>稼働ステータス:</span>
                 <span style={{ fontWeight: '600', color: isActive(selectedTemplate.templateStatus) ? '#16a34a' : '#64748b' }}>
                   {isActive(selectedTemplate.templateStatus) ? '稼働中' : '一時停止中'}
                 </span>
@@ -503,21 +655,37 @@ export default function RecurringPayments() {
               {/* 対象ユーザー */}
               <div className="form-group">
                 <label>申請者 (担当部員) <span style={{ color: '#ef4444' }}>*</span></label>
-                <select 
-                  className="form-input"
-                  value={formData.userId}
-                  onChange={(e) => setFormData({...formData, userId: e.target.value})}
-                  required
-                  disabled={modalMode === 'edit'}
-                >
-                  <option value="">選択してください</option>
-                  {users.map(u => (
-                    <option key={u.id} value={u.id}>{u.name}</option>
-                  ))}
-                </select>
-                <small style={{ color: '#64748b', fontSize: '11px' }}>
-                  {modalMode === 'edit' ? '※ 作成済みの担当者は変更できません' : '申請者として自動起票される部員を選択します'}
-                </small>
+                {isAdminOrManager ? (
+                  <>
+                    <select 
+                      className="form-input"
+                      value={formData.userId}
+                      onChange={(e) => setFormData({...formData, userId: e.target.value})}
+                      required
+                      disabled={modalMode === 'edit'}
+                    >
+                      <option value="">選択してください</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                    <small style={{ color: '#64748b', fontSize: '11px' }}>
+                      {modalMode === 'edit' ? '※ 作成済みの担当者は変更できません' : '申請者として自動起票される部員を選択します'}
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <input 
+                      type="text" 
+                      className="form-input bg-gray" 
+                      readOnly 
+                      value={`${jwtUserName} (自分)`} 
+                    />
+                    <small style={{ color: '#64748b', fontSize: '11px' }}>
+                      ※ あなた自身のアカウントで定期申請が登録されます
+                    </small>
+                  </>
+                )}
               </div>
 
               {/* テンプレート名 (申請タイトル兼用) */}

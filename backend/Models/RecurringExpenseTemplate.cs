@@ -20,6 +20,9 @@ public class RecurringExpenseTemplate
     public TemplateStatus TemplateStatus { get; set; } = TemplateStatus.Active; // この定期支払いの状態（有効 / 無効）
 
     [Required]
+    public ExpenseStatus ApprovalStatus { get; set; } = ExpenseStatus.Approved; // 承認状態（部員申請時はPendingApproval、承認後はApproved）
+
+    [Required]
     [MaxLength(255)]
     public string TemplateName { get; set; } = string.Empty; // テンプレート名（生成される申請のタイトルも兼ねる）
 
